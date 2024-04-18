@@ -21,18 +21,22 @@
 */
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <string.h>
 
 #include "assembler.h"
 
 void
 usage(char *name) {
-    printf("Usage: %s [options] file\nOptions\n"
+    fprintf(stderr, "Usage: %s [options] file\nOptions\n"
     "  -v\t\tVerbose output.\n  -g\t\tGenerate debug symbols for arfmipssim.\n  -o <file>\tPlace the output into <file>.\n", name);
 }
 
 char *
 read_whole_file(const char *fn) {
     FILE *f = fopen(fn, "r");
+    if (!f) return NULL;
 
     fseek(f, 0, SEEK_END);
     size_t ins = ftell(f);
@@ -83,10 +87,14 @@ main(int argc, char **argv) {
 
     /* Read input file */
     char *input = read_whole_file(infn);
+    if (!input) {
+        fprintf(stderr, "Error reading file: %s\n", strerror(errno));
+        return 1;
+    }
 
     /* Assemble input */
     segment_t *segments = NULL;
-    assemble(input, &segments, stderr);
+    assemble(input, &segments, stdout, stderr);
 
     return 0;
 }

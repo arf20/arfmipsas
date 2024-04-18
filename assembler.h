@@ -44,6 +44,6 @@ typedef struct {
 
 /* Routines */
 
-int assemble(const char *input, segment_t **output, FILE *errf);
+int assemble(const char *input, segment_t **output, FILE *verf, FILE *errf);
 
 #endif /* _ASSEMBLER_H */

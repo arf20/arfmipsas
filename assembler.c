@@ -20,8 +20,115 @@
 
 */
 
+#include <string.h>
+#include <ctype.h>
+
 #include "assembler.h"
 
-int assemble(const char *input, char **output, char **syms) {
-    
+const char *
+strip(const char *str) {
+    while (*str == '\t' || *str == ' ') str++;
+    return str;
+}
+
+size_t
+label_len(const char *str) {
+    size_t len = 0;
+    while (isalnum(*str) || *str == '_') {
+        len++;
+        str++;
+    }
+    return len;
+}
+
+size_t
+instruction_len(const char *str) {
+    size_t len = 0;
+    while (isalnum(*str)) {
+        len++;
+        str++;
+    }
+    return len;
+}
+
+int
+assemble(const char *input, segment_t **output, FILE *verf, FILE *errf) {
+    char *t = NULL;
+    size_t line = 1;
+    char buff[256];
+    size_t len = 0;
+
+    while (*input) {
+        input = strip(input);
+        if (*input == '\n') {
+            fprintf(verf, "%d: Empty line\n", line);
+            input++;
+            line++;
+        }
+        else if (*input == '#' || *input == ';') {
+            /* Comment */
+            input = strchr(input, '\n') + 1;
+            line++;
+        }
+        else if (*input == '.') {
+            /* Macro */
+            t = strchr(input, '\n') + 1;
+            len = t - input - 1;
+            strncpy(buff, input, len);
+            buff[len] = '\0';
+            fprintf(verf, "%d: Macro: %s\n", line, buff);
+
+            input = t;
+            line++;
+        }
+        else {
+            /* Label or instruction or both */
+            /*t = strchr(input, '\n') + 1;
+            len = t - input - 1;
+            strncpy(buff, input, len);
+            buff[len] = '\0';
+            fprintf(verf, "%d: Instruction: %s\n", line, buff);*/
+
+            const char *tok = input;
+            size_t ll = label_len(tok);
+            input = strip(input + ll);
+            if (*input == ':') {
+                /* Label */
+                strncpy(buff, tok, ll);
+                buff[ll] = '\0';
+                fprintf(verf, "%d: Label: %s\n", line, buff);
+                input = strip(input + 1);
+                
+                if (*input == '\n') {
+                    /* End of line */
+                    line++;
+                    input++;
+                }
+                else {
+                    /* Instruction after label */
+                    t = strchr(input, '\n') + 1;
+                    len = t - input - 1;
+                    strncpy(buff, input, len);
+                    buff[len] = '\0';
+                    fprintf(verf, "%d: Instruction: %s\n", line, buff);
+
+                    input = t;
+                    line++;
+                }
+            }
+            else {
+                /* Instruction */
+                t = strchr(input, '\n') + 1;
+                len = t - input - 1;
+                strncpy(buff, input, len);
+                buff[len] = '\0';
+                fprintf(verf, "%d: Instruction: %s\n", line, tok);
+
+                input = t;
+                line++;
+            }
+        }
+    }
+
+    return 0;
 }
