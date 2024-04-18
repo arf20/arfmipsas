@@ -8,4 +8,4 @@ entry:  insta
         instb
         instc
 routine:instd
-        inste
+another:inste

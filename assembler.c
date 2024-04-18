@@ -66,10 +66,11 @@ copy_keyword(const char *src, char *dst, size_t sz) {
 /* Symbol table helpers */
 symbol_table_t *
 symbol_table_new() {
-    symbol_table_t *st;
+    symbol_table_t *st = malloc(sizeof(symbol_table_t));
     st->table = malloc(SYMBOL_TABLE_INIT_SIZE * sizeof(symbol_t));
     st->size = 0;
     st->capacity = SYMBOL_TABLE_INIT_SIZE;
+    return st;
 }
 
 void
@@ -176,10 +177,11 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
                     input = copy_keyword(input, buff, BUFF_SIZE);
                     fprintf(verf, "%d: Instruction: %s\n", line, buff);
                     
-                    if (curr_seg != SEG_TEXT) 
-                        fprintf(errf, "%d: warning: instruction outside text segment\n", line);
-
-                    curr_addr[SEG_TEXT] += 4;   /* MIPS instructions are 4 bytes */
+                    if (passn == 0)
+                        if (curr_seg != SEG_TEXT) 
+                            fprintf(errf, "%d: warning: instruction outside text segment\n", line);
+                        else
+                            curr_addr[SEG_TEXT] += 4;   /* MIPS instructions are 4 bytes */
 
                 }
 
@@ -190,7 +192,7 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
     }
 }
 
-void
+int
 assemble(const char *input, segment_t **output, FILE *verf, FILE *errf) {
     /* Init segments */
     segment_t *segs = malloc(2 * sizeof(segment_t));
