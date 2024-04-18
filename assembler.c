@@ -20,13 +20,20 @@
 
 */
 
+#include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 #include <sys/param.h>
 
 #include "assembler.h"
 
+#define DATA_ORG    0x10010000
+#define TEXT_ORG    0x00400000
+
+/* Tunables */
 #define BUFF_SIZE   256
+#define SYMBOL_TABLE_INIT_SIZE  16  /* symbols */
+#define SEGMENT_INIT_SIZE       256 /* bytes */
 
 const char *
 strip(const char *str) {
@@ -56,8 +63,28 @@ copy_keyword(const char *src, char *dst, size_t sz) {
     return src;
 }
 
+/* Symbol table helpers */
+symbol_table_t *
+symbol_table_new() {
+    symbol_table_t *st;
+    st->table = malloc(SYMBOL_TABLE_INIT_SIZE * sizeof(symbol_t));
+    st->size = 0;
+    st->capacity = SYMBOL_TABLE_INIT_SIZE;
+}
+
+void
+symbol_table_push(symbol_table_t *st, symbol_t sym) {
+    /* Grow table by double */
+    if (st->size == st->capacity) {
+        st->table = realloc(st->table, 2*st->capacity);
+        st->capacity *= 2;
+    }
+    /* Insert at end */
+    st->table[st->size++] = sym;
+}
+
 int
-pass(int passn, const char *input, segment_t **output, FILE *verf, FILE *errf) {
+pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
     if (passn == 0)
         fprintf(verf, "=== FIRST PASS ===\n");
     else
@@ -69,8 +96,10 @@ pass(int passn, const char *input, segment_t **output, FILE *verf, FILE *errf) {
     char buff[BUFF_SIZE];
     size_t len = 0;
 
-    /* State */
+    /* First pass state */
     segid_t curr_seg = SEG_TEXT; /* .text by default */
+    addr_t curr_addr[2] = { DATA_ORG, TEXT_ORG };
+    
 
     while (*input) {
         input = strip(input);
@@ -89,11 +118,17 @@ pass(int passn, const char *input, segment_t **output, FILE *verf, FILE *errf) {
             size_t ll = label_len(input);
             if (input[ll] == ':') {
                 /* Label */
-                strncpy(buff, input, ll);
-                buff[ll] = '\0';
-                fprintf(verf, "%d: Label: %s\n", line, buff);
+                char *label = strndup(input, ll);
                 input = strip(input + ll + 1);
-                
+
+                if (passn == 0) {
+                    symbol_t sym;
+                    sym.label = label;
+                    sym.address = curr_addr[curr_seg];
+                    symbol_table_push(segs[curr_seg].symbols, sym);
+                    fprintf(verf, "%d: new label %s: 0x%.8x\n", line, label, sym.address);
+                }
+
                 if (*input == '\n') {
                     /* End of line */
                     line++;
@@ -112,12 +147,39 @@ pass(int passn, const char *input, segment_t **output, FILE *verf, FILE *errf) {
                     input = copy_keyword(input, buff, BUFF_SIZE);
                     fprintf(verf, "%d: Directive: %s\n", line, buff);
 
+                    /* Segment directives */
+                    if (strcmp(buff, "data") == 0) {
+                        curr_seg = SEG_DATA;
+                    } else if (strcmp(buff, "text") == 0) {
+                        curr_seg = SEG_TEXT;
+                    } else {
+                        /* Data directives */
+                        if (curr_seg == SEG_DATA) {
+                            if (strcmp(buff, "byte") == 0) {
+                                curr_addr[SEG_DATA] += 1;
+                            } else if (strcmp(buff, "half") == 0) {
+                                curr_addr[SEG_DATA] += 2;
+                            } else if (strcmp(buff, "word") == 0) {
+                                curr_addr[SEG_DATA] += 4;
+                            } else {
+                                /* Unknown directive */
+                                fprintf(errf, "%d: warning: unknown data directive %s\n",
+                                    line, buff);
+                            }
+                        }
+                    }
+                    
                     
 
                 } else {
                     /* Instruction */
                     input = copy_keyword(input, buff, BUFF_SIZE);
                     fprintf(verf, "%d: Instruction: %s\n", line, buff);
+                    
+                    if (curr_seg != SEG_TEXT) 
+                        fprintf(errf, "%d: warning: instruction outside text segment\n", line);
+
+                    curr_addr[SEG_TEXT] += 4;   /* MIPS instructions are 4 bytes */
 
                 }
 
@@ -128,14 +190,26 @@ pass(int passn, const char *input, segment_t **output, FILE *verf, FILE *errf) {
     }
 }
 
-int
+void
 assemble(const char *input, segment_t **output, FILE *verf, FILE *errf) {
+    /* Init segments */
+    segment_t *segs = malloc(2 * sizeof(segment_t));
+    for (segid_t i = SEG_DATA; i < SEG_TEXT + 1; i++) {
+        segs[i].id = i;
+        segs[i].data = malloc(SEGMENT_INIT_SIZE);
+        segs[i].size = 0;
+        segs[i].capacity = SEGMENT_INIT_SIZE;
+        segs[i].symbols = symbol_table_new();
+    }
+
     /* Two passes */
     for (int i = 0; i < 2; i++) {
-        int err = pass(i, input, output, verf, errf);
+        int err = pass(i, input, segs, verf, errf);
         if (err < 0)
             return err;
     }
+
+    *output = segs;
 
     return 0;
 }

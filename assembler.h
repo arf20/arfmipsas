@@ -36,10 +36,17 @@ typedef struct {
 } symbol_t;
 
 typedef struct {
+    symbol_t *table;
+    size_t size;
+    size_t capacity;
+} symbol_table_t;
+
+typedef struct {
     segid_t id;
     char *data;
     size_t size;
-    symbol_t *symbols;
+    size_t capacity;
+    symbol_table_t *symbols;
 } segment_t;
 
 /* Routines */
