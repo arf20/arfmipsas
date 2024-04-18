@@ -52,11 +52,15 @@ instruction_len(const char *str) {
 }
 
 int
-assemble(const char *input, segment_t **output, FILE *verf, FILE *errf) {
+pass(int passn, const char *input, segment_t **output, FILE *verf, FILE *errf) {
+    /* Deserialization vars */
     char *t = NULL;
     size_t line = 1;
     char buff[256];
     size_t len = 0;
+
+    /* State */
+    segid_t curr_seg = SEG_TEXT; /* .text by default */
 
     while (*input) {
         input = strip(input);
@@ -83,12 +87,6 @@ assemble(const char *input, segment_t **output, FILE *verf, FILE *errf) {
         }
         else {
             /* Label or instruction or both */
-            /*t = strchr(input, '\n') + 1;
-            len = t - input - 1;
-            strncpy(buff, input, len);
-            buff[len] = '\0';
-            fprintf(verf, "%d: Instruction: %s\n", line, buff);*/
-
             const char *tok = input;
             size_t ll = label_len(tok);
             input = strip(input + ll);
@@ -128,6 +126,16 @@ assemble(const char *input, segment_t **output, FILE *verf, FILE *errf) {
                 line++;
             }
         }
+    }
+}
+
+int
+assemble(const char *input, segment_t **output, FILE *verf, FILE *errf) {
+    /* Two passes */
+    for (int i = 0; i < 2; i++) {
+        int err = pass(i, input, output, verf, errf);
+        if (err < 0)
+            return err;
     }
 
     return 0;
