@@ -22,8 +22,11 @@
 
 #include <string.h>
 #include <ctype.h>
+#include <sys/param.h>
 
 #include "assembler.h"
+
+#define BUFF_SIZE   256
 
 const char *
 strip(const char *str) {
@@ -41,22 +44,29 @@ label_len(const char *str) {
     return len;
 }
 
-size_t
-instruction_len(const char *str) {
-    size_t len = 0;
-    while (isalnum(*str)) {
-        len++;
-        str++;
+const char *
+copy_keyword(const char *src, char *dst, size_t sz) {
+    char  *ptr = dst;
+    while (isalpha(*src) && ptr - dst < sz) {
+        *ptr = *src;
+        ptr++;
+        src++;
     }
-    return len;
+    *ptr = '\0';
+    return src;
 }
 
 int
 pass(int passn, const char *input, segment_t **output, FILE *verf, FILE *errf) {
+    if (passn == 0)
+        fprintf(verf, "=== FIRST PASS ===\n");
+    else
+        fprintf(verf, "=== SECOND PASS ===\n");
+
     /* Deserialization vars */
-    char *t = NULL;
+    const char *t = NULL;
     size_t line = 1;
-    char buff[256];
+    char buff[BUFF_SIZE];
     size_t len = 0;
 
     /* State */
@@ -74,53 +84,42 @@ pass(int passn, const char *input, segment_t **output, FILE *verf, FILE *errf) {
             input = strchr(input, '\n') + 1;
             line++;
         }
-        else if (*input == '.') {
-            /* Macro */
-            t = strchr(input, '\n') + 1;
-            len = t - input - 1;
-            strncpy(buff, input, len);
-            buff[len] = '\0';
-            fprintf(verf, "%d: Macro: %s\n", line, buff);
-
-            input = t;
-            line++;
-        }
         else {
             /* Label or instruction or both */
-            const char *tok = input;
-            size_t ll = label_len(tok);
-            input = strip(input + ll);
-            if (*input == ':') {
+            size_t ll = label_len(input);
+            if (input[ll] == ':') {
                 /* Label */
-                strncpy(buff, tok, ll);
+                strncpy(buff, input, ll);
                 buff[ll] = '\0';
                 fprintf(verf, "%d: Label: %s\n", line, buff);
-                input = strip(input + 1);
+                input = strip(input + ll + 1);
                 
                 if (*input == '\n') {
                     /* End of line */
                     line++;
                     input++;
                 }
-                else {
-                    /* Instruction after label */
-                    t = strchr(input, '\n') + 1;
-                    len = t - input - 1;
-                    strncpy(buff, input, len);
-                    buff[len] = '\0';
-                    fprintf(verf, "%d: Instruction: %s\n", line, buff);
-
-                    input = t;
-                    line++;
-                }
+                /* Else, fall to insturction next iteration */
             }
             else {
                 /* Instruction */
                 t = strchr(input, '\n') + 1;
-                len = t - input - 1;
-                strncpy(buff, input, len);
-                buff[len] = '\0';
-                fprintf(verf, "%d: Instruction: %s\n", line, tok);
+
+                if (*input == '.') {
+                    /* Directive */
+                    input++; /* skip period */
+                    /* Get directive */
+                    input = copy_keyword(input, buff, BUFF_SIZE);
+                    fprintf(verf, "%d: Directive: %s\n", line, buff);
+
+                    
+
+                } else {
+                    /* Instruction */
+                    input = copy_keyword(input, buff, BUFF_SIZE);
+                    fprintf(verf, "%d: Instruction: %s\n", line, buff);
+
+                }
 
                 input = t;
                 line++;
