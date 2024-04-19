@@ -50,6 +50,26 @@ read_whole_file(const char *fn) {
     return buff;
 }
 
+void
+print_symbols(segment_t *segs) {
+    printf("=== SYMBOL TABLE ===\n  segment\n    label           address\n"
+    "  ----------------------------\n");
+    for (int i = 0; i < 2; i++) { /* 2 segments */
+        switch (segs[i].id) {
+            case SEG_DATA: printf("  .data\n"); break;
+            case SEG_TEXT: printf("  .text\n"); break;
+        }
+
+        
+        for (int j = 0; j < segs[i].symbols->size; j++) {
+            symbol_t s = segs[i].symbols->table[j];
+            printf("    %s:", s.label);
+            printf("%.*s", 16 - strlen(s.label) - 1, "                ");
+            printf("0x%.8x\n", s.address);
+        }
+    }  
+}
+
 int
 main(int argc, char **argv) {
     if (argc < 2) {
@@ -95,6 +115,8 @@ main(int argc, char **argv) {
     /* Assemble input */
     segment_t *segments = NULL;
     assemble(input, &segments, stdout, stderr);
+
+    print_symbols(segments);
 
     return 0;
 }

@@ -63,6 +63,26 @@ copy_keyword(const char *src, char *dst, size_t sz) {
     return src;
 }
 
+const char *
+get_numeric_parameter(const char *str, int *p) {
+    char buff[BUFF_SIZE];
+    int i = 0;
+    int v = 0;
+    while (isdigit(*str) || *str == 'x' || *str == 'b') {
+        if (i >= BUFF_SIZE) break;
+        buff[i] = *str;
+        i++;
+    }
+    if (buff[1] == 'b') {
+        /* hex */
+        *p = strtol(buff + 2, NULL, 2);
+    } else {
+        /* hex (0x), oct (0) or dec */
+        *p = strtol(buff, NULL, 0);
+    }
+    return str;
+}
+
 /* Symbol table helpers */
 symbol_table_t *
 symbol_table_new() {
@@ -84,13 +104,75 @@ symbol_table_push(symbol_table_t *st, symbol_t sym) {
     st->table[st->size++] = sym;
 }
 
+addr_t
+next_data_addr(const char *dir, const char *p, addr_t curr_addr, int line,
+    FILE *errf)
+{
+    int p1;
+
+    if (strcmp(dir, "byte") == 0) {
+        curr_addr += 1;
+    } else if (strcmp(dir, "half") == 0) {
+        curr_addr += 2;
+    } else if (strcmp(dir, "word") == 0) {
+        curr_addr += 4;
+    } else if (strcmp(dir, "ascii") == 0) {
+        if (*p != '\"') {
+            fprintf(errf, "%d: warning: expected string literal\n",
+                line);
+            return curr_addr;
+        }
+
+        while (*p != '\"') {
+            curr_addr++;
+            p++;
+        }
+    } else if (strcmp(dir, "asciiz") == 0) {
+        if (*p != '\"') {
+            fprintf(errf, "%d: warning: expected string literal\n",
+                line);
+            return curr_addr;
+        }
+        
+        while (*p != '\"') {
+            curr_addr++;
+            p++;
+        }
+
+        curr_addr++; /* NUL terminator */
+    } else if (strcmp(dir, "align") == 0) {
+        get_numeric_parameter(p, &p1);
+        switch (p1) {
+            case 1: {
+                if (curr_addr % 2)
+                    curr_addr++;
+            } break;
+            case 2: {
+                int r = curr_addr % 4;
+                if (r)
+                    curr_addr += 4 - r;
+            } break;
+            default: {
+                fprintf(errf, "%d: warning: unknown alignment\n",
+                    line);
+            }
+        }
+        curr_addr += p1;
+    } else if (strcmp(dir, "space") == 0) {
+        get_numeric_parameter(p, &p1);
+        curr_addr += p1;
+    } else {
+        /* Unknown directive */
+        fprintf(errf, "%d: warning: unknown data directive %s\n",
+            line, dir);
+    }
+
+    return curr_addr;
+}
+
+
 int
 pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
-    if (passn == 0)
-        fprintf(verf, "=== FIRST PASS ===\n");
-    else
-        fprintf(verf, "=== SECOND PASS ===\n");
-
     /* Deserialization vars */
     const char *t = NULL;
     size_t line = 1;
@@ -127,7 +209,7 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
                     sym.label = label;
                     sym.address = curr_addr[curr_seg];
                     symbol_table_push(segs[curr_seg].symbols, sym);
-                    fprintf(verf, "%d: new label %s: 0x%.8x\n", line, label, sym.address);
+                    fprintf(verf, "%d: label %s: 0x%.8x\n", line, label, sym.address);
                 }
 
                 if (*input == '\n') {
@@ -146,7 +228,8 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
                     input++; /* skip period */
                     /* Get directive */
                     input = copy_keyword(input, buff, BUFF_SIZE);
-                    fprintf(verf, "%d: Directive: %s\n", line, buff);
+                    input = strip(input);
+                    fprintf(verf, "%d: directive: .%s\n", line, buff);
 
                     /* Segment directives */
                     if (strcmp(buff, "data") == 0) {
@@ -156,22 +239,14 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
                     } else {
                         /* Data directives */
                         if (curr_seg == SEG_DATA) {
-                            if (strcmp(buff, "byte") == 0) {
-                                curr_addr[SEG_DATA] += 1;
-                            } else if (strcmp(buff, "half") == 0) {
-                                curr_addr[SEG_DATA] += 2;
-                            } else if (strcmp(buff, "word") == 0) {
-                                curr_addr[SEG_DATA] += 4;
-                            } else {
-                                /* Unknown directive */
-                                fprintf(errf, "%d: warning: unknown data directive %s\n",
+                            curr_addr[SEG_DATA] = next_data_addr(buff, input,
+                                curr_addr[SEG_DATA], line, errf);
+                        }
+                        else {
+                            fprintf(errf, "%d: warning: data directive in text segment\n",
                                     line, buff);
-                            }
                         }
                     }
-                    
-                    
-
                 } else {
                     /* Instruction */
                     input = copy_keyword(input, buff, BUFF_SIZE);
@@ -206,9 +281,16 @@ assemble(const char *input, segment_t **output, FILE *verf, FILE *errf) {
 
     /* Two passes */
     for (int i = 0; i < 2; i++) {
+        if (i == 0)
+            fprintf(verf, "=== FIRST PASS ===\n");
+        else
+            fprintf(verf, "=== SECOND PASS ===\n");
+        
         int err = pass(i, input, segs, verf, errf);
         if (err < 0)
             return err;
+
+        fprintf(verf, "\n");
     }
 
     *output = segs;
