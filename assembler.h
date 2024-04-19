@@ -24,6 +24,11 @@
 #include <stdio.h>
 #include <stdint.h>
 
+/* Macros */
+
+#define DATA_ORG    0x10010000
+#define TEXT_ORG    0x00400000
+
 /* Types */
 
 typedef uint32_t addr_t;
@@ -43,7 +48,7 @@ typedef struct {
 
 typedef struct {
     segid_t id;
-    char *data;
+    uint8_t *data;
     size_t size;
     size_t capacity;
     symbol_table_t *symbols;

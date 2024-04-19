@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "assembler.h"
 
@@ -52,22 +53,67 @@ read_whole_file(const char *fn) {
 
 void
 print_symbols(segment_t *segs) {
-    printf("=== SYMBOL TABLE ===\n  segment\n    label           address\n"
-    "  ----------------------------\n");
+    printf("=== SYMBOL TABLE ===\nsegment\n  label           address\n"
+    "----------------------------\n");
     for (int i = 0; i < 2; i++) { /* 2 segments */
         switch (segs[i].id) {
-            case SEG_DATA: printf("  .data\n"); break;
-            case SEG_TEXT: printf("  .text\n"); break;
+            case SEG_DATA: printf(".data [%d]\n", segs[i].size); break;
+            case SEG_TEXT: printf(".text [%d]\n", segs[i].size); break;
         }
-
         
         for (int j = 0; j < segs[i].symbols->size; j++) {
             symbol_t s = segs[i].symbols->table[j];
-            printf("    %s:", s.label);
+            printf("  %s:", s.label);
             printf("%.*s", 16 - strlen(s.label) - 1, "                ");
             printf("0x%.8x\n", s.address);
         }
-    }  
+    }
+    printf("\n");
+}
+
+void
+dump_segments(segment_t *segs) {
+    printf("=== SEGMENT DUMP ===\n");
+    for (int i = 0; i < 2; i++) { /* 2 segments */
+        addr_t org;
+        switch (segs[i].id) {
+            case SEG_DATA: {
+                printf(".data", segs[i].size);
+                org = DATA_ORG;
+            } break;
+            case SEG_TEXT: {
+                printf(".text", segs[i].size); 
+                org = TEXT_ORG;
+            } break;
+        }
+        
+        printf("    0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f    ASCII");
+
+        int j = 0;
+        for (; j < segs[i].size; j++) {
+            if (j % 16 == 0) {
+                if (j != 0) {
+                    printf("  ");
+                    for (int k = j - 16; k < j; k++)
+                        isprint(segs[i].data[k]) ? putchar(segs[i].data[k]) : putchar('.');
+                }
+                printf("\n%.8x ", org + j);
+            }
+
+            printf("%.2x ", segs[i].data[j]);
+        }
+        
+        if (j % 16 != 0) {
+            printf("  ");
+            for (int k = 0; k < 16 - (j % 16); k++)
+                printf("   ");
+            for (int k = 16 * (j / 16); k < segs[i].size; k++)
+                isprint(segs[i].data[k]) ? putchar(segs[i].data[k]) : putchar('.');
+        }
+
+        printf("\n");
+    }
+    
 }
 
 int
@@ -114,9 +160,16 @@ main(int argc, char **argv) {
 
     /* Assemble input */
     segment_t *segments = NULL;
-    assemble(input, &segments, stdout, stderr);
+    int r = assemble(input, &segments, stdout, stderr);
+    if (r < 0) {
+        fprintf(stderr, "Error assembling\n");
+        return 1;
+    }
 
+    /* Verbose */
     print_symbols(segments);
+
+    dump_segments(segments);
 
     return 0;
 }

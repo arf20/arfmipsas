@@ -27,9 +27,6 @@
 
 #include "assembler.h"
 
-#define DATA_ORG    0x10010000
-#define TEXT_ORG    0x00400000
-
 /* Tunables */
 #define BUFF_SIZE   256
 #define SYMBOL_TABLE_INIT_SIZE  16  /* symbols */
@@ -68,11 +65,13 @@ get_numeric_parameter(const char *str, int *p) {
     char buff[BUFF_SIZE];
     int i = 0;
     int v = 0;
-    while (isdigit(*str) || *str == 'x' || *str == 'b') {
+    while (isxdigit(*str) || *str == 'x' || *str == 'b') {
         if (i >= BUFF_SIZE) break;
         buff[i] = *str;
+        str++;
         i++;
     }
+    buff[i] = '\0';
     if (buff[1] == 'b') {
         /* hex */
         *p = strtol(buff + 2, NULL, 2);
@@ -122,7 +121,7 @@ next_data_addr(const char *dir, const char *p, addr_t curr_addr, int line,
                 line);
             return curr_addr;
         }
-
+        p++; /* skip " */
         while (*p != '\"') {
             curr_addr++;
             p++;
@@ -133,7 +132,7 @@ next_data_addr(const char *dir, const char *p, addr_t curr_addr, int line,
                 line);
             return curr_addr;
         }
-        
+        p++; /* skip " */
         while (*p != '\"') {
             curr_addr++;
             p++;
@@ -157,7 +156,6 @@ next_data_addr(const char *dir, const char *p, addr_t curr_addr, int line,
                     line);
             }
         }
-        curr_addr += p1;
     } else if (strcmp(dir, "space") == 0) {
         get_numeric_parameter(p, &p1);
         curr_addr += p1;
@@ -168,6 +166,48 @@ next_data_addr(const char *dir, const char *p, addr_t curr_addr, int line,
     }
 
     return curr_addr;
+}
+
+void
+write_data(char *segdata, const char *dir, const char *p, addr_t addr, int line,
+    FILE *verf, FILE *errf)
+{
+    addr -= DATA_ORG;
+    int p1;
+    get_numeric_parameter(p, &p1);
+
+    if (strcmp(dir, "byte") == 0) {
+        segdata[addr] = p1;
+    } else if (strcmp(dir, "half") == 0) {
+        *(int16_t*)&segdata[addr] = p1;
+    } else if (strcmp(dir, "word") == 0) {
+        *(int32_t*)&segdata[addr] = p1;
+    } else if (strcmp(dir, "ascii") == 0) {
+        if (*p != '\"') {
+            return;
+        }
+        p++; /* skip " "*/
+        while (*p != '\"') {
+            segdata[addr] = *p;
+            p++;
+            addr++;
+        }
+    } else if (strcmp(dir, "asciiz") == 0) {
+        if (*p != '\"') {
+            return;
+        }
+        p++; /* skip " "*/
+        while (*p != '\"') {
+            segdata[addr] = *p;
+            p++;
+            addr++;
+        }
+
+        addr++; /* NUL terminator */
+        segdata[addr] = '\0';
+    }
+
+    return;
 }
 
 
@@ -183,7 +223,6 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
     segid_t curr_seg = SEG_TEXT; /* .text by default */
     addr_t curr_addr[2] = { DATA_ORG, TEXT_ORG };
     
-
     while (*input) {
         input = strip(input);
         if (*input == '\n') {
@@ -205,6 +244,7 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
                 input = strip(input + ll + 1);
 
                 if (passn == 0) {
+                    /* Symbol calculation first pass only */
                     symbol_t sym;
                     sym.label = label;
                     sym.address = curr_addr[curr_seg];
@@ -217,7 +257,7 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
                     line++;
                     input++;
                 }
-                /* Else, fall to insturction next iteration */
+                /* Else, fall to instruction on next iteration */
             }
             else {
                 /* Instruction */
@@ -239,6 +279,10 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
                     } else {
                         /* Data directives */
                         if (curr_seg == SEG_DATA) {
+                            if (passn == 1)
+                                write_data(segs[0].data, buff, input,
+                                    curr_addr[SEG_DATA], line, verf, errf);
+                            
                             curr_addr[SEG_DATA] = next_data_addr(buff, input,
                                 curr_addr[SEG_DATA], line, errf);
                         }
@@ -250,7 +294,7 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
                 } else {
                     /* Instruction */
                     input = copy_keyword(input, buff, BUFF_SIZE);
-                    fprintf(verf, "%d: Instruction: %s\n", line, buff);
+                    fprintf(verf, "%d: instruction: %s\n", line, buff);
                     
                     if (passn == 0)
                         if (curr_seg != SEG_TEXT) 
@@ -265,6 +309,18 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
             }
         }
     }
+
+    if (passn == 0) {
+        /* Calculate segment size and allocate segments at first pass */
+        segs[0].size = curr_addr[0] - DATA_ORG;
+        segs[0].data = malloc(segs[0].size);
+        memset(segs[0].data, 0, segs[0].size);
+        segs[1].size = curr_addr[1] - TEXT_ORG;
+        segs[1].data = malloc(segs[1].size);
+        memset(segs[1].data, 0, segs[1].size);
+    }
+
+    return 0;
 }
 
 int
@@ -287,9 +343,10 @@ assemble(const char *input, segment_t **output, FILE *verf, FILE *errf) {
             fprintf(verf, "=== SECOND PASS ===\n");
         
         int err = pass(i, input, segs, verf, errf);
-        if (err < 0)
+        if (err < 0) {
             return err;
-
+        }
+            
         fprintf(verf, "\n");
     }
 
