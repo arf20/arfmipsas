@@ -240,11 +240,11 @@ encode_j(uint8_t op, addr_t addr) {
     return i;
 }
 
-reg_t
-get_register_operand(const char *oper, int line, FILE *errf) {
+const char *
+get_register_operand(const char *oper, reg_t *r, int line, FILE *errf) {
     if (*oper != '$') {
         fprintf(errf, "%d: warning: expected register\n", line);
-        return 0;
+        return oper;
     }
     oper++; /* skip $ */
 
@@ -257,36 +257,59 @@ get_register_operand(const char *oper, int line, FILE *errf) {
     }
     buff[i] = '\0';
 
+    int unknown = 0;
     if (strlen(buff) == 4 && strcmp(buff, "zero") == 0)
-        return 0;
+        *r = 0;
     else if (strlen(buff) == 2) { 
         if (strcmp(buff, "at") == 0)
-            return 1;
+            *r = 1;
         else if (strcmp(buff, "gp") == 0)
-            return 28;
+            *r = 28;
         else if (strcmp(buff, "sp") == 0)
-            return 29;
+            *r = 29;
         else if (strcmp(buff, "fp") == 0)
-            return 30;
+            *r = 30;
         else if (strcmp(buff, "ra") == 0)
-            return 31;
+            *r = 31;
+        else unknown = 1;
     } else if (strlen(buff) == 1) {
         int n = strtol(oper, NULL, 10);
         if (buff[0] == 'v' && n >= 0 && n <= 1)
-            return 2 + n;
+            *r = 2 + n;
         else if (buff[0] == 'a' && n >= 0 && n <= 3)
-            return 4 + n;
-        else if (buff[0] == 't' && n >= 0 && n <= 9)
-            if (n < 8) return 8 + n;
-            else return 24 + n - 8;
+            *r = 4 + n;
+        else if (buff[0] == 't' && n >= 0 && n <= 9) {
+            if (n < 8) *r = 8 + n;
+            else *r = 24 + n - 8;
+        }
         else if (buff[0] == 's' && n >= 0 && n <= 7)
-            return 16 + n;
+            *r = 16 + n;
         else if (buff[0] == 'k' && n >= 0 && n <= 1)
-            return 26 + n;
-    }
+            *r = 26 + n;
+        else unknown = 1;
+    } else unknown = 1;
 
-    fprintf(errf, "%d: warning: unknown register\n", line);
-        return 0;
+    if (unknown) {
+        fprintf(errf, "%d: warning: unknown register\n", line);
+        *r = 0;
+    }
+    return oper + 1; /* all register pseudo numer < 10 */
+}
+
+
+word_t
+parse_reg_operands(const char *oper, int n, reg_t *regs, int line, FILE *errf) {
+    /* max 3 regs */
+    for (int i = 0; i < n; i++) {
+        oper = get_register_operand(oper, regs, line, errf);
+        if (i < n - 1) {
+            if (*oper != ',')
+                fprintf(errf, "%d: warning: expected ,\n", line);
+            oper++; /* skip , */
+            oper = strip(oper);
+            regs++;
+        }
+    }
 }
 
 void
@@ -294,9 +317,26 @@ encode_instruction(uint8_t *segdata, addr_t addr, const char *ins,
     const char *oper,  int line, FILE *verf, FILE *errf)
 {
     addr -= TEXT_ORG;
-    if (strcmp(ins, "add") == 0) {
-
-        /*segdata[addr] = encode_r(0, )*/
+    reg_t regs[3];
+    /* ALU instructions are R format
+        regs: $a, $b, $c => rd, rs, rt */
+    if (strcmp(ins, "and") == 0) {
+        parse_reg_operands(oper, 3, regs, line, errf);
+        *(word_t*)&segdata[addr] = encode_r(0, regs[1], regs[2], regs[0], 0, 0b100100);
+    } else if (strcmp(ins, "or") == 0) {
+        parse_reg_operands(oper, 3, regs, line, errf);
+        *(word_t*)&segdata[addr] = encode_r(0, regs[1], regs[2], regs[0], 0, 0b100101);
+    } else if (strcmp(ins, "add") == 0) {
+        parse_reg_operands(oper, 3, regs, line, errf);
+        *(word_t*)&segdata[addr] = encode_r(0, regs[1], regs[2], regs[0], 0, 0b100000);
+    } else if (strcmp(ins, "sub") == 0) {
+        parse_reg_operands(oper, 3, regs, line, errf);
+        *(word_t*)&segdata[addr] = encode_r(0, regs[1], regs[2], regs[0], 0, 0b100010);
+    } else if (strcmp(ins, "slt") == 0) {
+        parse_reg_operands(oper, 3, regs, line, errf);
+        *(word_t*)&segdata[addr] = encode_r(0, regs[1], regs[2], regs[0], 0, 0b101010);
+    } else {
+        fprintf(errf, "%d: warning: unknown instruction\n", line);
     }
 }
 
@@ -385,6 +425,7 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
                     /* Instruction */
                     input = copy_keyword(input, buff, BUFF_SIZE);
                     fprintf(verf, "%d: instruction: %s\n", line, buff);
+                    input = strip(input);
                     
                     if (passn == 0) {
                         if (curr_seg != SEG_TEXT) 
@@ -392,8 +433,8 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
                         else
                             curr_addr[SEG_TEXT] += 4;   /* MIPS instructions are 4 bytes */
                     } else {
-                        encode_instruction(curr_addr[SEG_TEXT], buff, input, 
-                            line, verf, errf);
+                        encode_instruction(segs[SEG_TEXT].data,
+                            curr_addr[SEG_TEXT], buff, input, line, verf, errf);
                         if (curr_seg == SEG_TEXT) curr_addr[SEG_TEXT] += 4;;
                     }
                 

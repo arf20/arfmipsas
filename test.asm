@@ -8,7 +8,7 @@ value2: .word 0x87654321
         .space 5
         .byte 0x42
         .text
-entry:  insta
+entry:  add $t0, $t1, $t2
         instb
         instc
 routine:instd

@@ -46,13 +46,13 @@
 
 ### Arithmetic Logic register to register
 
-| instruction     | operation     | format | op     | func   |
-|-----------------|---------------|--------|--------|--------|
-| and $a, $b, $c  | $a = $b & $c  | R      | 000000 | 100100 |
-| or  $a, $b, $c  | $a = $b \| $c | R      | 000000 | 100101 |
-| add $a, $b, $c  | $a = $b + $c  | R      | 000000 | 100000 |
-| sub $a, $b, $c  | $a = $b - $c  | R      | 000000 | 100010 |
-| slt $a, $b, $c  | $a = $b - $c  | R      | 000000 | 101010 |
+| instruction     | operation        | format | op     | func   |
+|-----------------|------------------|--------|--------|--------|
+| and $a, $b, $c  | $a = $b & $c     | R      | 000000 | 100100 |
+| or  $a, $b, $c  | $a = $b \| $c    | R      | 000000 | 100101 |
+| add $a, $b, $c  | $a = $b + $c     | R      | 000000 | 100000 |
+| sub $a, $b, $c  | $a = $b - $c     | R      | 000000 | 100010 |
+| slt $a, $b, $c  | $a = $b - $c < 0 | R      | 000000 | 101010 |
 
  - rs = $b
  - rt = $c
