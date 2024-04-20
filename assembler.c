@@ -61,7 +61,7 @@ copy_keyword(const char *src, char *dst, size_t sz) {
 }
 
 const char *
-get_numeric_parameter(const char *str, int *p) {
+get_numeric_operand(const char *str, int *p) {
     char buff[BUFF_SIZE];
     int i = 0;
     int v = 0;
@@ -140,7 +140,7 @@ next_data_addr(const char *dir, const char *p, addr_t curr_addr, int line,
 
         curr_addr++; /* NUL terminator */
     } else if (strcmp(dir, "align") == 0) {
-        get_numeric_parameter(p, &p1);
+        get_numeric_operand(p, &p1);
         switch (p1) {
             case 1: {
                 if (curr_addr % 2)
@@ -157,7 +157,7 @@ next_data_addr(const char *dir, const char *p, addr_t curr_addr, int line,
             }
         }
     } else if (strcmp(dir, "space") == 0) {
-        get_numeric_parameter(p, &p1);
+        get_numeric_operand(p, &p1);
         curr_addr += p1;
     } else {
         /* Unknown directive */
@@ -174,7 +174,7 @@ int line, FILE *verf, FILE *errf)
 {
     addr -= DATA_ORG;
     int p1;
-    get_numeric_parameter(p, &p1);
+    get_numeric_operand(p, &p1);
 
     if (strcmp(dir, "byte") == 0) {
         segdata[addr] = p1;
@@ -211,7 +211,7 @@ int line, FILE *verf, FILE *errf)
 }
 
 word_t
-encode_r(int op, int rs, int rt, int rd, int shamt, int func) {
+encode_r(uint8_t op, reg_t rs, reg_t rt, reg_t rd, uint8_t shamt, uint8_t func) {
     word_t i = 0;
     i |= (op &    0b111111)   << 26;
     i |= (rs &    0b11111)    << 21;
@@ -223,7 +223,7 @@ encode_r(int op, int rs, int rt, int rd, int shamt, int func) {
 }
 
 word_t
-encode_i(int op, int rs, int rt, int imm) {
+encode_i(uint8_t op, reg_t rs, reg_t rt, uint16_t imm) {
     word_t i = 0;
     i |= (op &    0b111111)   << 26;
     i |= (rs &    0b11111)    << 21;
@@ -233,11 +233,60 @@ encode_i(int op, int rs, int rt, int imm) {
 }
 
 word_t
-encode_i(int op, addr_t addr) {
+encode_j(uint8_t op, addr_t addr) {
     word_t i = 0;
     i |= (op &    0b111111)   << 26;
     i |= (addr & 0b00001111111111111111111111111100) >> 2; /* j = addr[27-2] */
     return i;
+}
+
+reg_t
+get_register_operand(const char *oper, int line, FILE *errf) {
+    if (*oper != '$') {
+        fprintf(errf, "%d: warning: expected register\n", line);
+        return 0;
+    }
+    oper++; /* skip $ */
+
+    char buff[256];
+    int i = 0;
+    while (isalpha(*oper)) {
+        buff[i] = *oper;
+        i++;
+        oper++;
+    }
+    buff[i] = '\0';
+
+    if (strlen(buff) == 4 && strcmp(buff, "zero") == 0)
+        return 0;
+    else if (strlen(buff) == 2) { 
+        if (strcmp(buff, "at") == 0)
+            return 1;
+        else if (strcmp(buff, "gp") == 0)
+            return 28;
+        else if (strcmp(buff, "sp") == 0)
+            return 29;
+        else if (strcmp(buff, "fp") == 0)
+            return 30;
+        else if (strcmp(buff, "ra") == 0)
+            return 31;
+    } else if (strlen(buff) == 1) {
+        int n = strtol(oper, NULL, 10);
+        if (buff[0] == 'v' && n >= 0 && n <= 1)
+            return 2 + n;
+        else if (buff[0] == 'a' && n >= 0 && n <= 3)
+            return 4 + n;
+        else if (buff[0] == 't' && n >= 0 && n <= 9)
+            if (n < 8) return 8 + n;
+            else return 24 + n - 8;
+        else if (buff[0] == 's' && n >= 0 && n <= 7)
+            return 16 + n;
+        else if (buff[0] == 'k' && n >= 0 && n <= 1)
+            return 26 + n;
+    }
+
+    fprintf(errf, "%d: warning: unknown register\n", line);
+        return 0;
 }
 
 void
@@ -246,7 +295,8 @@ encode_instruction(uint8_t *segdata, addr_t addr, const char *ins,
 {
     addr -= TEXT_ORG;
     if (strcmp(ins, "add") == 0) {
-        
+
+        /*segdata[addr] = encode_r(0, )*/
     }
 }
 

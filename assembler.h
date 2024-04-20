@@ -33,6 +33,7 @@
 
 typedef uint32_t addr_t;
 typedef uint32_t word_t;
+typedef uint8_t reg_t;
 
 typedef enum { SEG_DATA, SEG_TEXT } segid_t;
 
