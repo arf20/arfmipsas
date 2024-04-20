@@ -169,8 +169,8 @@ next_data_addr(const char *dir, const char *p, addr_t curr_addr, int line,
 }
 
 void
-write_data(char *segdata, const char *dir, const char *p, addr_t addr, int line,
-    FILE *verf, FILE *errf)
+write_data(uint8_t *segdata, const char *dir, const char *p, addr_t addr,
+int line, FILE *verf, FILE *errf)
 {
     addr -= DATA_ORG;
     int p1;
@@ -208,6 +208,46 @@ write_data(char *segdata, const char *dir, const char *p, addr_t addr, int line,
     }
 
     return;
+}
+
+word_t
+encode_r(int op, int rs, int rt, int rd, int shamt, int func) {
+    word_t i = 0;
+    i |= (op &    0b111111)   << 26;
+    i |= (rs &    0b11111)    << 21;
+    i |= (rt &    0b11111)    << 16;
+    i |= (rd &    0b11111)    << 11;
+    i |= (shamt & 0b11111)    << 6;
+    i |= (func &  0b111111)   << 0;
+    return i;
+}
+
+word_t
+encode_i(int op, int rs, int rt, int imm) {
+    word_t i = 0;
+    i |= (op &    0b111111)   << 26;
+    i |= (rs &    0b11111)    << 21;
+    i |= (rt &    0b11111)    << 16;
+    i |= (imm &   0xffff)     << 0;
+    return i;
+}
+
+word_t
+encode_i(int op, addr_t addr) {
+    word_t i = 0;
+    i |= (op &    0b111111)   << 26;
+    i |= (addr & 0b00001111111111111111111111111100) >> 2; /* j = addr[27-2] */
+    return i;
+}
+
+void
+encode_instruction(uint8_t *segdata, addr_t addr, const char *ins,
+    const char *oper,  int line, FILE *verf, FILE *errf)
+{
+    addr -= TEXT_ORG;
+    if (strcmp(ins, "add") == 0) {
+        
+    }
 }
 
 
@@ -296,12 +336,17 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
                     input = copy_keyword(input, buff, BUFF_SIZE);
                     fprintf(verf, "%d: instruction: %s\n", line, buff);
                     
-                    if (passn == 0)
+                    if (passn == 0) {
                         if (curr_seg != SEG_TEXT) 
                             fprintf(errf, "%d: warning: instruction outside text segment\n", line);
                         else
                             curr_addr[SEG_TEXT] += 4;   /* MIPS instructions are 4 bytes */
-
+                    } else {
+                        encode_instruction(curr_addr[SEG_TEXT], buff, input, 
+                            line, verf, errf);
+                        if (curr_seg == SEG_TEXT) curr_addr[SEG_TEXT] += 4;;
+                    }
+                
                 }
 
                 input = t;
