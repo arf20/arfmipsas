@@ -329,6 +329,44 @@ parse_immediate_operand(const char *oper, uint16_t *imm, int line, FILE *errf) {
     return oper;
 }
 
+const char *
+parse_base_displacement_operand(const char *oper, uint16_t *imm, reg_t *base,
+    int line, FILE *errf)
+{
+    /* expects , initiator */
+    oper = strip(oper);
+    if (*oper != ',') {
+        fprintf(errf, "%d: warning: expected ,\n", line);
+        return oper;
+    }
+    oper++; /* skip , */
+    oper = strip(oper);
+
+    /* get displacement */
+    int dis;
+    oper = get_numeric_operand(oper, &dis);
+    *imm = dis;
+
+    oper = strip(oper);
+    
+    if (*oper != '(') {
+        fprintf(errf, "%d: warning: expected (\n", line);
+        return oper;
+    }
+    oper++; /* skip ( */
+    oper = strip(oper);
+
+    /* get base register */
+    oper = get_register_operand(oper, base, line, errf);
+
+    oper = strip(oper);
+    if (*oper != ')')
+        fprintf(errf, "%d: warning: expected )\n", line);
+    oper++;
+    oper = strip(oper);
+    return oper; /* at \n presumably */
+}
+
 void
 encode_instruction(uint8_t *segdata, addr_t addr, const char *ins,
     const char *oper,  int line, FILE *verf, FILE *errf)
@@ -355,11 +393,24 @@ encode_instruction(uint8_t *segdata, addr_t addr, const char *ins,
         *(word_t*)&segdata[addr] = encode_r(0, regs[1], regs[2], regs[0], 0, 0b101010);
     }
     /* ALU immediate instructions, I format
-        regs: $a, $b, imm */
+        fields: $a, $b, imm */
     else if (strcmp(ins, "ori") == 0) {
         oper = parse_reg_operands(oper, 2, regs, line, errf);
         oper = parse_immediate_operand(oper, &imm, line, errf);
         *(word_t*)&segdata[addr] = encode_i(0b001101, regs[1], regs[0], imm);
+    }
+    /* Memory instructions, I format */
+    else if (strcmp(ins, "lw") == 0) {
+        /* $a, off($b) => rt, imm(rs) */
+        oper = parse_reg_operands(oper, 1, regs, line, errf);
+        oper = parse_base_displacement_operand(oper, &imm, regs + 1, line, errf);
+        *(word_t*)&segdata[addr] = encode_i(0b100011, regs[0], regs[1], imm);
+    }
+    else if (strcmp(ins, "sw") == 0) {
+        /* $a, off($b) => rs, imm(rt) */
+        oper = parse_reg_operands(oper, 1, regs, line, errf);
+        oper = parse_base_displacement_operand(oper, &imm, regs + 1, line, errf);
+        *(word_t*)&segdata[addr] = encode_i(0b101011, regs[1], regs[0], imm);
     }
     else {
         fprintf(errf, "%d:  ^^ warning: unknown instruction\n", line);

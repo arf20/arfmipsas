@@ -10,6 +10,6 @@ value2: .word 0x87654321
         .text
 entry:  add $t0, $t1, $t2
         ori $s0, $s1, 0x1234
-        instc
+        sw $t0, 123($t1)
 routine:instd
 another:inste
