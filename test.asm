@@ -9,7 +9,7 @@ value2: .word 0x87654321
         .byte 0x42
         .text
 entry:  add $t0, $t1, $t2
-        instb
+        ori $s0, $s1, 0x1234
         instc
 routine:instd
 another:inste

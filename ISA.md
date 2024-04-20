@@ -62,7 +62,7 @@
 
 | instruction     | operation        | format | op     |
 |-----------------|------------------|--------|--------|
-| ori $a, $b, val | $a = $b | val    | I      | 001101 |
+| ori $a, $b, val | $a = $b \| val   | I      | 001101 |
 
  - rs = $b
  - rt = $a

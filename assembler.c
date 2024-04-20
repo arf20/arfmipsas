@@ -297,7 +297,7 @@ get_register_operand(const char *oper, reg_t *r, int line, FILE *errf) {
 }
 
 
-word_t
+const char *
 parse_reg_operands(const char *oper, int n, reg_t *regs, int line, FILE *errf) {
     /* max 3 regs */
     for (int i = 0; i < n; i++) {
@@ -310,6 +310,23 @@ parse_reg_operands(const char *oper, int n, reg_t *regs, int line, FILE *errf) {
             regs++;
         }
     }
+    return oper;
+}
+
+const char *
+parse_immediate_operand(const char *oper, uint16_t *imm, int line, FILE *errf) {
+    /* expects , initiator */
+    if (*oper != ',') {
+        fprintf(errf, "%d: warning: expected ,\n", line);
+        return oper;
+    }
+
+    oper++;
+    oper = strip(oper);
+    int t;
+    oper = get_numeric_operand(oper, &t);
+    *imm = t;
+    return oper;
 }
 
 void
@@ -318,8 +335,9 @@ encode_instruction(uint8_t *segdata, addr_t addr, const char *ins,
 {
     addr -= TEXT_ORG;
     reg_t regs[3];
-    /* ALU instructions are R format
-        regs: $a, $b, $c => rd, rs, rt */
+    uint16_t imm;
+    /* ALU instructions, R format
+        fields: $a, $b, $c => rd, rs, rt */
     if (strcmp(ins, "and") == 0) {
         parse_reg_operands(oper, 3, regs, line, errf);
         *(word_t*)&segdata[addr] = encode_r(0, regs[1], regs[2], regs[0], 0, 0b100100);
@@ -335,9 +353,17 @@ encode_instruction(uint8_t *segdata, addr_t addr, const char *ins,
     } else if (strcmp(ins, "slt") == 0) {
         parse_reg_operands(oper, 3, regs, line, errf);
         *(word_t*)&segdata[addr] = encode_r(0, regs[1], regs[2], regs[0], 0, 0b101010);
-    } else {
-        fprintf(errf, "%d: warning: unknown instruction\n", line);
     }
+    /* ALU immediate instructions, I format
+        regs: $a, $b, imm */
+    else if (strcmp(ins, "ori") == 0) {
+        oper = parse_reg_operands(oper, 2, regs, line, errf);
+        oper = parse_immediate_operand(oper, &imm, line, errf);
+        *(word_t*)&segdata[addr] = encode_i(0b001101, regs[1], regs[0], imm);
+    }
+    else {
+        fprintf(errf, "%d:  ^^ warning: unknown instruction\n", line);
+    }   
 }
 
 
@@ -379,7 +405,7 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
                     sym.label = label;
                     sym.address = curr_addr[curr_seg];
                     symbol_table_push(segs[curr_seg].symbols, sym);
-                    fprintf(verf, "%d: label %s: 0x%.8x\n", line, label, sym.address);
+                    fprintf(verf, "%d:  -> label %s: 0x%.8x\n", line, label, sym.address);
                 }
 
                 if (*input == '\n') {
@@ -393,6 +419,9 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
                 /* Instruction */
                 t = strchr(input, '\n') + 1;
 
+                if (t == (const char*)0x1) /* EOF */
+                    break;
+                
                 if (*input == '.') {
                     /* Directive */
                     input++; /* skip period */
