@@ -224,7 +224,8 @@ int line, FILE *verf, FILE *errf)
 }
 
 word_t
-encode_r(uint8_t op, reg_t rs, reg_t rt, reg_t rd, uint8_t shamt, uint8_t func) {
+encode_r(uint8_t op, reg_t rs, reg_t rt, reg_t rd, uint8_t shamt, uint8_t func)
+{
     word_t i = 0;
     i |= (op &    0b111111)   << 26;
     i |= (rs &    0b11111)    << 21;
@@ -412,19 +413,24 @@ encode_instruction(segment_t *segs, addr_t addr, const char *ins,
         fields: $a, $b, $c => rd, rs, rt */
     if (strcmp(ins, "and") == 0) {
         parse_reg_operands(oper, 3, regs, line, errf);
-        *(word_t*)&segdata[addr] = encode_r(0, regs[1], regs[2], regs[0], 0, 0b100100);
+        *(word_t*)&segdata[addr] = encode_r(0, regs[1], regs[2], regs[0], 0,
+            0b100100);
     } else if (strcmp(ins, "or") == 0) {
         parse_reg_operands(oper, 3, regs, line, errf);
-        *(word_t*)&segdata[addr] = encode_r(0, regs[1], regs[2], regs[0], 0, 0b100101);
+        *(word_t*)&segdata[addr] = encode_r(0, regs[1], regs[2], regs[0], 0,
+            0b100101);
     } else if (strcmp(ins, "add") == 0) {
         parse_reg_operands(oper, 3, regs, line, errf);
-        *(word_t*)&segdata[addr] = encode_r(0, regs[1], regs[2], regs[0], 0, 0b100000);
+        *(word_t*)&segdata[addr] = encode_r(0, regs[1], regs[2], regs[0], 0,
+            0b100000);
     } else if (strcmp(ins, "sub") == 0) {
         parse_reg_operands(oper, 3, regs, line, errf);
-        *(word_t*)&segdata[addr] = encode_r(0, regs[1], regs[2], regs[0], 0, 0b100010);
+        *(word_t*)&segdata[addr] = encode_r(0, regs[1], regs[2], regs[0], 0,
+            0b100010);
     } else if (strcmp(ins, "slt") == 0) {
         parse_reg_operands(oper, 3, regs, line, errf);
-        *(word_t*)&segdata[addr] = encode_r(0, regs[1], regs[2], regs[0], 0, 0b101010);
+        *(word_t*)&segdata[addr] = encode_r(0, regs[1], regs[2], regs[0], 0,
+            0b101010);
     }
     /* ALU immediate instructions, I format
         fields: $a, $b, imm */
@@ -439,14 +445,16 @@ encode_instruction(segment_t *segs, addr_t addr, const char *ins,
         /* $a, off($b) => rt, imm(rs) */
         oper = parse_reg_operands(oper, 1, regs, line, errf);
         oper = skip_operand_separator(oper, line, errf);
-        oper = parse_base_displacement_operand(oper, &imm, regs + 1, line, errf);
+        oper = parse_base_displacement_operand(oper, &imm, regs + 1, line,
+            errf);
         *(word_t*)&segdata[addr] = encode_i(0b100011, regs[0], regs[1], imm);
     }
     else if (strcmp(ins, "sw") == 0) {
         /* $a, off($b) => rs, imm(rt) */
         oper = parse_reg_operands(oper, 1, regs, line, errf);
         oper = skip_operand_separator(oper, line, errf);
-        oper = parse_base_displacement_operand(oper, &imm, regs + 1, line, errf);
+        oper = parse_base_displacement_operand(oper, &imm, regs + 1, line,
+            errf);
         *(word_t*)&segdata[addr] = encode_i(0b101011, regs[1], regs[0], imm);
     }
     /* Immediate constant 
@@ -518,7 +526,8 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
                     sym.label = label;
                     sym.address = curr_addr[curr_seg];
                     symbol_table_push(segs[curr_seg].symbols, sym);
-                    fprintf(verf, "%d:  -> label %s: 0x%.8x\n", line, label, sym.address);
+                    fprintf(verf, "%d:  -> label %s: 0x%.8x\n", line, label,
+                        sym.address);
                 }
 
                 if (*input == '\n') {
@@ -559,8 +568,8 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
                                 curr_addr[SEG_DATA], line, errf);
                         }
                         else {
-                            fprintf(errf, "%d: warning: data directive in text segment\n",
-                                    line, buff);
+                            fprintf(errf, "%d: warning: data directive in text "
+                                "segment\n", line, buff);
                         }
                     }
                 } else {
@@ -571,9 +580,11 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
                     
                     if (passn == 0) {
                         if (curr_seg != SEG_TEXT) 
-                            fprintf(errf, "%d: warning: instruction outside text segment\n", line);
+                            fprintf(errf, "%d: warning: instruction outside "
+                                "text segment\n", line);
                         else
-                            curr_addr[SEG_TEXT] += 4;   /* MIPS instructions are 4 bytes */
+                            /* MIPS instructions are 4 bytes */
+                            curr_addr[SEG_TEXT] += 4;  
                     } else {
                         encode_instruction(segs,
                             curr_addr[SEG_TEXT], buff, input, line, verf, errf);
