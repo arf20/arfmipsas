@@ -36,4 +36,4 @@ Example
 
 ## Output
 
-
+The assembler currently only supports dumping the .data and .test segments into files raw from the origin.
