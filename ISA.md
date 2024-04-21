@@ -76,8 +76,12 @@
 | sw  $a, off($b) | M[$b + off] = $a | I      | 101011 |
 
  - imm = off
- - rs = $b
- - rt = $a
+ - lw
+   - rs = $b
+   - rt = $a
+ - sw
+   - rs = $a
+   - rt = $b
 
 ### Immediate constant loading
 
@@ -85,6 +89,7 @@
 |-----------------|------------------|--------|--------|
 | lui $a, val     | $a = val         | I      | 100011 |
 
+ - rt = $a
  - imm = val
 
 ### Conditional jump
@@ -95,7 +100,7 @@
 
  - rs = $a
  - rt = $b
- - imm = (label - (PC + 4)) / 4 (relative jump)
+ - imm = (label - PC + 4) / 4 (relative jump)
 
 ### Inconditional jump
 

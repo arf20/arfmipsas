@@ -38,10 +38,15 @@ strip(const char *str) {
     return str;
 }
 
+int
+islabelchar(char c) {
+    return isalnum(c) || c == '_';
+}
+
 size_t
 label_len(const char *str) {
     size_t len = 0;
-    while (isalnum(*str) || *str == '_') {
+    while (islabelchar(*str)) {
         len++;
         str++;
     }
@@ -101,6 +106,14 @@ symbol_table_push(symbol_table_t *st, symbol_t sym) {
     }
     /* Insert at end */
     st->table[st->size++] = sym;
+}
+
+addr_t
+symbol_table_lookup(symbol_table_t *st, const char *label) {
+    for (int i = 0; i < st->size; i++)
+        if (strcmp(st->table[i].label, label) == 0)
+            return st->table[i].address;
+    return 0; /* on not found */
 }
 
 addr_t
@@ -223,7 +236,7 @@ encode_r(uint8_t op, reg_t rs, reg_t rt, reg_t rd, uint8_t shamt, uint8_t func) 
 }
 
 word_t
-encode_i(uint8_t op, reg_t rs, reg_t rt, uint16_t imm) {
+encode_i(uint8_t op, reg_t rs, reg_t rt, int16_t imm) {
     word_t i = 0;
     i |= (op &    0b111111)   << 26;
     i |= (rs &    0b11111)    << 21;
@@ -248,9 +261,9 @@ get_register_operand(const char *oper, reg_t *r, int line, FILE *errf) {
     }
     oper++; /* skip $ */
 
-    char buff[256];
+    char buff[BUFF_SIZE];
     int i = 0;
-    while (isalpha(*oper)) {
+    while (isalpha(*oper) && i < BUFF_SIZE - 1) {
         buff[i] = *oper;
         i++;
         oper++;
@@ -369,13 +382,40 @@ parse_base_displacement_operand(const char *oper, uint16_t *imm, reg_t *base,
     return oper; /* at \n presumably */
 }
 
+const char *
+parse_label_operand(const char *oper, symbol_table_t *st, addr_t *addr,
+    int line, FILE *errf)
+{
+    char buff[BUFF_SIZE];
+    int i = 0;
+    while (islabelchar(*oper) && i < BUFF_SIZE) {
+        buff[i] = *oper;
+        i++;
+        oper++;
+    }
+    buff[i] = '\0';
+    *addr = symbol_table_lookup(st, buff);
+    return strip(oper);
+}
+
+int16_t
+calculate_relative_jump(addr_t from, addr_t to) {
+    /* 0 relative is from + 4 */
+    return (to - from - 4) / 4;
+}
+
 void
-encode_instruction(uint8_t *segdata, addr_t addr, const char *ins,
+encode_instruction(segment_t *segs, addr_t addr, const char *ins,
     const char *oper,  int line, FILE *verf, FILE *errf)
 {
+
+    uint8_t *segdata = segs[SEG_TEXT].data;
+
     addr -= TEXT_ORG;
-    reg_t regs[3];
-    uint16_t imm;
+    reg_t regs[3]; /* register operands */
+    uint16_t imm; /* immediate data */
+    addr_t label_addr; /* jump addr */
+
     /* ALU instructions, R format
         fields: $a, $b, $c => rd, rs, rt */
     if (strcmp(ins, "and") == 0) {
@@ -420,6 +460,15 @@ encode_instruction(uint8_t *segdata, addr_t addr, const char *ins,
         oper = parse_reg_operands(oper, 1, regs, line, errf);
         oper = parse_immediate_operand(oper, &imm, line, errf);
         *(word_t*)&segdata[addr] = encode_i(0b000100, 0, regs[0], imm);
+    }
+    /* Conditional jump
+        $a, $b, label => rs, rt, (label) */
+    else if (strcmp(ins, "beq") == 0) {
+        oper = parse_reg_operands(oper, 2, regs, line, errf);
+        oper = parse_label_operand(oper, segs[SEG_TEXT].symbols, &label_addr,
+            line, errf);
+        *(word_t*)&segdata[addr] = encode_i(0b000100, regs[0], regs[1],
+            calculate_relative_jump(addr + TEXT_ORG, label_addr));
     }
     else {
         fprintf(errf, "%d:  ^^ warning: unknown instruction\n", line);
@@ -513,7 +562,7 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
                 } else {
                     /* Instruction */
                     input = copy_keyword(input, buff, BUFF_SIZE);
-                    fprintf(verf, "%d: instruction: %s\n", line, buff);
+                    fprintf(verf, "%d: instruction: %s", line, buff);
                     input = strip(input);
                     
                     if (passn == 0) {
@@ -522,11 +571,12 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
                         else
                             curr_addr[SEG_TEXT] += 4;   /* MIPS instructions are 4 bytes */
                     } else {
-                        encode_instruction(segs[SEG_TEXT].data,
+                        encode_instruction(segs,
                             curr_addr[SEG_TEXT], buff, input, line, verf, errf);
                         if (curr_seg == SEG_TEXT) curr_addr[SEG_TEXT] += 4;;
                     }
                 
+                    fprintf(verf, "\n");
                 }
 
                 input = t;

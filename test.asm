@@ -12,3 +12,4 @@ entry:  add $t0 , $t1 , $t2
         ori $s0 , $s1 , 0x1234 
         sw $t0, 0x1234 ( $t1 ) 
         lui $t0, 0x1234
+        beq $t0, $t1, entry
