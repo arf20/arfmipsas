@@ -93,9 +93,10 @@ dump_segments(segment_t *segs) {
         for (; j < segs[i].size; j++) {
             if (j % 16 == 0) {
                 if (j != 0) {
-                    printf("  ");
+                    printf("  |");
                     for (int k = j - 16; k < j; k++)
                         isprint(segs[i].data[k]) ? putchar(segs[i].data[k]) : putchar('.');
+                    printf("|");
                 }
                 printf("\n%.8x ", org + j);
             }
@@ -104,11 +105,12 @@ dump_segments(segment_t *segs) {
         }
         
         if (j % 16 != 0) {
-            printf("  ");
             for (int k = 0; k < 16 - (j % 16); k++)
                 printf("   ");
+            printf("  |");
             for (int k = 16 * (j / 16); k < segs[i].size; k++)
                 isprint(segs[i].data[k]) ? putchar(segs[i].data[k]) : putchar('.');
+            printf("|");
         }
 
         printf("\n");
@@ -151,6 +153,11 @@ main(int argc, char **argv) {
         return 1;
     }
 
+    if (!outfn) {
+        outfn = malloc(256);
+        strcpy(outfn, "a");
+    }
+
     /* Read input file */
     char *input = read_whole_file(infn);
     if (!input) {
@@ -170,6 +177,21 @@ main(int argc, char **argv) {
     print_symbols(segments);
 
     dump_segments(segments);
+
+    char buff[256];
+
+    strcpy(buff, outfn);
+    strcat(buff, ".data");
+    FILE *outdf = fopen(buff, "wb");
+    fwrite(segments[SEG_DATA].data, segments[SEG_DATA].size, 1, outdf);
+    fclose(outdf);
+
+    strcpy(buff, outfn);
+    strcat(buff, ".text");
+    FILE *outtf = fopen(buff, "wb");
+    fwrite(segments[SEG_DATA].data, segments[SEG_DATA].size, 1, outtf);
+    fclose(outtf);
+
 
     return 0;
 }
