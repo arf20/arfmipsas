@@ -102,7 +102,7 @@
  - rt = $b
  - imm = (label - PC + 4) / 4 (relative jump)
 
-### Inconditional jump
+### Unconditional jump
 
 | instruction     | operation        | format | op     |
 |-----------------|------------------|--------|--------|

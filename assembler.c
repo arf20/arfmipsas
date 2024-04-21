@@ -254,6 +254,17 @@ encode_j(uint8_t op, addr_t addr) {
 }
 
 const char *
+skip_operand_separator(const char *oper, int line, FILE *errf) {
+    oper = strip(oper);
+    if (*oper != ',') {
+        fprintf(errf, "%d: warning: expected ,\n", line);
+        return oper;
+    }
+    oper++;
+    return strip(oper);
+}
+
+const char *
 get_register_operand(const char *oper, reg_t *r, int line, FILE *errf) {
     if (*oper != '$') {
         fprintf(errf, "%d: warning: expected register\n", line);
@@ -309,7 +320,6 @@ get_register_operand(const char *oper, reg_t *r, int line, FILE *errf) {
     return oper + 1; /* all register pseudo numer < 10 */
 }
 
-
 const char *
 parse_reg_operands(const char *oper, int n, reg_t *regs, int line, FILE *errf) {
     /* max 3 regs */
@@ -320,8 +330,7 @@ parse_reg_operands(const char *oper, int n, reg_t *regs, int line, FILE *errf) {
         if (i < n - 1) {
             if (*oper != ',')
                 fprintf(errf, "%d: warning: expected ,\n", line);
-            oper++; /* skip , */
-            oper = strip(oper);
+            oper = skip_operand_separator(oper, line, errf);
             regs++;
         }
     }
@@ -330,14 +339,6 @@ parse_reg_operands(const char *oper, int n, reg_t *regs, int line, FILE *errf) {
 
 const char *
 parse_immediate_operand(const char *oper, uint16_t *imm, int line, FILE *errf) {
-    /* expects , initiator */
-    oper = strip(oper);
-    if (*oper != ',') {
-        fprintf(errf, "%d: warning: expected ,\n", line);
-        return oper;
-    }
-    oper++;
-    oper = strip(oper);
     int t;
     oper = get_numeric_operand(oper, &t);
     *imm = t;
@@ -348,15 +349,6 @@ const char *
 parse_base_displacement_operand(const char *oper, uint16_t *imm, reg_t *base,
     int line, FILE *errf)
 {
-    /* expects , initiator */
-    oper = strip(oper);
-    if (*oper != ',') {
-        fprintf(errf, "%d: warning: expected ,\n", line);
-        return oper;
-    }
-    oper++; /* skip , */
-    oper = strip(oper);
-
     /* get displacement */
     int dis;
     oper = get_numeric_operand(oper, &dis);
@@ -438,6 +430,7 @@ encode_instruction(segment_t *segs, addr_t addr, const char *ins,
         fields: $a, $b, imm */
     else if (strcmp(ins, "ori") == 0) {
         oper = parse_reg_operands(oper, 2, regs, line, errf);
+        oper = skip_operand_separator(oper, line, errf);
         oper = parse_immediate_operand(oper, &imm, line, errf);
         *(word_t*)&segdata[addr] = encode_i(0b001101, regs[1], regs[0], imm);
     }
@@ -445,12 +438,14 @@ encode_instruction(segment_t *segs, addr_t addr, const char *ins,
     else if (strcmp(ins, "lw") == 0) {
         /* $a, off($b) => rt, imm(rs) */
         oper = parse_reg_operands(oper, 1, regs, line, errf);
+        oper = skip_operand_separator(oper, line, errf);
         oper = parse_base_displacement_operand(oper, &imm, regs + 1, line, errf);
         *(word_t*)&segdata[addr] = encode_i(0b100011, regs[0], regs[1], imm);
     }
     else if (strcmp(ins, "sw") == 0) {
         /* $a, off($b) => rs, imm(rt) */
         oper = parse_reg_operands(oper, 1, regs, line, errf);
+        oper = skip_operand_separator(oper, line, errf);
         oper = parse_base_displacement_operand(oper, &imm, regs + 1, line, errf);
         *(word_t*)&segdata[addr] = encode_i(0b101011, regs[1], regs[0], imm);
     }
@@ -458,6 +453,7 @@ encode_instruction(segment_t *segs, addr_t addr, const char *ins,
         $a, val => rt, val */
     else if (strcmp(ins, "lui") == 0) {
         oper = parse_reg_operands(oper, 1, regs, line, errf);
+        oper = skip_operand_separator(oper, line, errf);
         oper = parse_immediate_operand(oper, &imm, line, errf);
         *(word_t*)&segdata[addr] = encode_i(0b000100, 0, regs[0], imm);
     }
@@ -465,10 +461,18 @@ encode_instruction(segment_t *segs, addr_t addr, const char *ins,
         $a, $b, label => rs, rt, (label) */
     else if (strcmp(ins, "beq") == 0) {
         oper = parse_reg_operands(oper, 2, regs, line, errf);
+        oper = skip_operand_separator(oper, line, errf);
         oper = parse_label_operand(oper, segs[SEG_TEXT].symbols, &label_addr,
             line, errf);
         *(word_t*)&segdata[addr] = encode_i(0b000100, regs[0], regs[1],
             calculate_relative_jump(addr + TEXT_ORG, label_addr));
+    }
+    /* Unconditional jump 
+        label => addr */
+    else if (strcmp(ins, "j") == 0) {
+        oper = parse_label_operand(oper, segs[SEG_TEXT].symbols, &label_addr,
+            line, errf);
+        *(word_t*)&segdata[addr] = encode_j(0b000010, label_addr);
     }
     else {
         fprintf(errf, "%d:  ^^ warning: unknown instruction\n", line);
