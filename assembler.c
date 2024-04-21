@@ -116,44 +116,59 @@ symbol_table_lookup(symbol_table_t *st, const char *label) {
     return 0; /* on not found */
 }
 
+int
+count_data_operands(const char *oper) {
+    int v, i = 0;
+    while (isprint(*oper)) {
+        oper = strip(oper);
+        oper = get_numeric_operand(oper, &v);
+        i++;
+        oper = strip(oper);
+        if (*oper != ',') break;
+        oper++;
+        oper = strip(oper);
+    }
+    return i;
+}
+
 addr_t
-next_data_addr(const char *dir, const char *p, addr_t curr_addr, int line,
+next_data_addr(const char *dir, const char *oper, addr_t curr_addr, int line,
     FILE *errf)
 {
     int p1;
 
     if (strcmp(dir, "byte") == 0) {
-        curr_addr += 1;
+        curr_addr += count_data_operands(oper);
     } else if (strcmp(dir, "half") == 0) {
-        curr_addr += 2;
+        curr_addr += 2 * count_data_operands(oper);
     } else if (strcmp(dir, "word") == 0) {
-        curr_addr += 4;
+        curr_addr += 4 * count_data_operands(oper);
     } else if (strcmp(dir, "ascii") == 0) {
-        if (*p != '\"') {
+        if (*oper != '\"') {
             fprintf(errf, "%d: warning: expected string literal\n",
                 line);
             return curr_addr;
         }
-        p++; /* skip " */
-        while (*p != '\"') {
+        oper++; /* skip " */
+        while (*oper != '\"') {
             curr_addr++;
-            p++;
+            oper++;
         }
     } else if (strcmp(dir, "asciiz") == 0) {
-        if (*p != '\"') {
+        if (*oper != '\"') {
             fprintf(errf, "%d: warning: expected string literal\n",
                 line);
             return curr_addr;
         }
-        p++; /* skip " */
-        while (*p != '\"') {
+        oper++; /* skip " */
+        while (*oper != '\"') {
             curr_addr++;
-            p++;
+            oper++;
         }
 
         curr_addr++; /* NUL terminator */
     } else if (strcmp(dir, "align") == 0) {
-        get_numeric_operand(p, &p1);
+        get_numeric_operand(oper, &p1);
         switch (p1) {
             case 1: {
                 if (curr_addr % 2)
@@ -170,7 +185,7 @@ next_data_addr(const char *dir, const char *p, addr_t curr_addr, int line,
             }
         }
     } else if (strcmp(dir, "space") == 0) {
-        get_numeric_operand(p, &p1);
+        get_numeric_operand(oper, &p1);
         curr_addr += p1;
     } else {
         /* Unknown directive */
@@ -181,40 +196,104 @@ next_data_addr(const char *dir, const char *p, addr_t curr_addr, int line,
     return curr_addr;
 }
 
+const char *
+write_data_bytes(const char *oper, int8_t *ptr, FILE *verf) {
+    int v, i = 0;
+    while (isprint(*oper)) {
+        oper = strip(oper);
+        oper = get_numeric_operand(oper, &v);
+        *ptr = v;
+        fprintf(verf, "%d", *ptr);
+        ptr++;
+        i++;
+        /* skip , */
+        oper = strip(oper);
+        if (*oper != ',') break;
+        fprintf(verf, ", ");
+        oper++;
+        oper = strip(oper);
+    }
+    return oper;
+}
+
+const char *
+write_data_halfs(const char *oper, int16_t *ptr, FILE *verf) {
+    int v, i = 0;
+    while (isprint(*oper)) {
+        oper = strip(oper);
+        oper = get_numeric_operand(oper, &v);
+        *ptr = v;
+        fprintf(verf, "%d", *ptr);
+        ptr++;
+        i++;
+        /* skip , */
+        oper = strip(oper);
+        if (*oper != ',') break;
+        fprintf(verf, ", ");
+        oper++;
+        oper = strip(oper);
+    }
+    return oper;
+}
+
+const char *
+write_data_words(const char *oper, int32_t *ptr, FILE *verf) {
+    int v, i = 0;
+    while (isprint(*oper)) {
+        oper = strip(oper);
+        oper = get_numeric_operand(oper, &v);
+        *ptr = v;
+        fprintf(verf, "%d", *ptr);
+        ptr++;
+        i++;
+        /* skip , */
+        oper = strip(oper);
+        if (*oper != ',') break;
+        fprintf(verf, ", ");
+        oper++;
+        oper = strip(oper);
+    }
+    return oper;
+}
+
 void
-write_data(uint8_t *segdata, const char *dir, const char *p, addr_t addr,
+write_data(uint8_t *segdata, const char *dir, const char *oper, addr_t addr,
 int line, FILE *verf, FILE *errf)
 {
     addr -= DATA_ORG;
-    int p1;
-    get_numeric_operand(p, &p1);
 
     if (strcmp(dir, "byte") == 0) {
-        segdata[addr] = p1;
+        write_data_bytes(oper, segdata + addr, verf);
     } else if (strcmp(dir, "half") == 0) {
-        *(int16_t*)&segdata[addr] = p1;
+        write_data_halfs(oper, (int16_t*)&segdata[addr], verf);
     } else if (strcmp(dir, "word") == 0) {
-        *(int32_t*)&segdata[addr] = p1;
+        write_data_words(oper, (int32_t*)&segdata[addr], verf);
     } else if (strcmp(dir, "ascii") == 0) {
-        if (*p != '\"') {
+        if (*oper != '\"') {
             return;
         }
-        p++; /* skip " "*/
-        while (*p != '\"') {
-            segdata[addr] = *p;
-            p++;
+        oper++; /* skip " */
+        fprintf(verf, "\"");
+        while (*oper != '\"') {
+            segdata[addr] = *oper;
+            fprintf(verf, "%c", *oper);
+            oper++;
             addr++;
         }
+        fprintf(verf, "\"");
     } else if (strcmp(dir, "asciiz") == 0) {
-        if (*p != '\"') {
+        if (*oper != '\"') {
             return;
         }
-        p++; /* skip " "*/
-        while (*p != '\"') {
-            segdata[addr] = *p;
-            p++;
+        oper++; /* skip " */
+        fprintf(verf, "\"");
+        while (*oper != '\"') {
+            segdata[addr] = *oper;
+            fprintf(verf, "%c", *oper);
+            oper++;
             addr++;
         }
+        fprintf(verf, "\"");
 
         addr++; /* NUL terminator */
         segdata[addr] = '\0';
@@ -255,13 +334,14 @@ encode_j(uint8_t op, addr_t addr) {
 }
 
 const char *
-skip_operand_separator(const char *oper, int line, FILE *errf) {
+skip_operand_separator(const char *oper, int line, FILE *verf, FILE *errf) {
     oper = strip(oper);
     if (*oper != ',') {
         fprintf(errf, "%d: warning: expected ,\n", line);
         return oper;
     }
     oper++;
+    printf(", ");
     return strip(oper);
 }
 
@@ -322,16 +402,19 @@ get_register_operand(const char *oper, reg_t *r, int line, FILE *errf) {
 }
 
 const char *
-parse_reg_operands(const char *oper, int n, reg_t *regs, int line, FILE *errf) {
+parse_reg_operands(const char *oper, int n, reg_t *regs, int line, FILE *verf,
+    FILE *errf)
+{
     /* max 3 regs */
     for (int i = 0; i < n; i++) {
         oper = strip(oper);
         oper = get_register_operand(oper, regs, line, errf);
+        fprintf(verf, "$%d", *regs);
         oper = strip(oper);
         if (i < n - 1) {
             if (*oper != ',')
                 fprintf(errf, "%d: warning: expected ,\n", line);
-            oper = skip_operand_separator(oper, line, errf);
+            oper = skip_operand_separator(oper, line, verf, errf);
             regs++;
         }
     }
@@ -339,16 +422,19 @@ parse_reg_operands(const char *oper, int n, reg_t *regs, int line, FILE *errf) {
 }
 
 const char *
-parse_immediate_operand(const char *oper, uint16_t *imm, int line, FILE *errf) {
+parse_immediate_operand(const char *oper, uint16_t *imm, int line, FILE *verf,
+    FILE *errf)
+{
     int t;
     oper = get_numeric_operand(oper, &t);
     *imm = t;
+    printf("%d", *imm);
     return oper;
 }
 
 const char *
 parse_base_displacement_operand(const char *oper, uint16_t *imm, reg_t *base,
-    int line, FILE *errf)
+    int line, FILE *verf, FILE *errf)
 {
     /* get displacement */
     int dis;
@@ -372,12 +458,14 @@ parse_base_displacement_operand(const char *oper, uint16_t *imm, reg_t *base,
         fprintf(errf, "%d: warning: expected )\n", line);
     oper++;
     oper = strip(oper);
+
+    fprintf(verf, "%d($%d)", *imm, *base);
     return oper; /* at \n presumably */
 }
 
 const char *
 parse_label_operand(const char *oper, symbol_table_t *st, addr_t *addr,
-    int line, FILE *errf)
+    int line, FILE *verf, FILE *errf)
 {
     char buff[BUFF_SIZE];
     int i = 0;
@@ -388,6 +476,8 @@ parse_label_operand(const char *oper, symbol_table_t *st, addr_t *addr,
     }
     buff[i] = '\0';
     *addr = symbol_table_lookup(st, buff);
+
+    fprintf(verf, "0x%.8x", *addr);
     return strip(oper);
 }
 
@@ -412,66 +502,66 @@ encode_instruction(segment_t *segs, addr_t addr, const char *ins,
     /* ALU instructions, R format
         fields: $a, $b, $c => rd, rs, rt */
     if (strcmp(ins, "and") == 0) {
-        parse_reg_operands(oper, 3, regs, line, errf);
+        parse_reg_operands(oper, 3, regs, line, verf, errf);
         *(word_t*)&segdata[addr] = encode_r(0, regs[1], regs[2], regs[0], 0,
             0b100100);
     } else if (strcmp(ins, "or") == 0) {
-        parse_reg_operands(oper, 3, regs, line, errf);
+        parse_reg_operands(oper, 3, regs, line, verf, errf);
         *(word_t*)&segdata[addr] = encode_r(0, regs[1], regs[2], regs[0], 0,
             0b100101);
     } else if (strcmp(ins, "add") == 0) {
-        parse_reg_operands(oper, 3, regs, line, errf);
+        parse_reg_operands(oper, 3, regs, line, verf, errf);
         *(word_t*)&segdata[addr] = encode_r(0, regs[1], regs[2], regs[0], 0,
             0b100000);
     } else if (strcmp(ins, "sub") == 0) {
-        parse_reg_operands(oper, 3, regs, line, errf);
+        parse_reg_operands(oper, 3, regs, line, verf, errf);
         *(word_t*)&segdata[addr] = encode_r(0, regs[1], regs[2], regs[0], 0,
             0b100010);
     } else if (strcmp(ins, "slt") == 0) {
-        parse_reg_operands(oper, 3, regs, line, errf);
+        parse_reg_operands(oper, 3, regs, line, verf, errf);
         *(word_t*)&segdata[addr] = encode_r(0, regs[1], regs[2], regs[0], 0,
             0b101010);
     }
     /* ALU immediate instructions, I format
         fields: $a, $b, imm */
     else if (strcmp(ins, "ori") == 0) {
-        oper = parse_reg_operands(oper, 2, regs, line, errf);
-        oper = skip_operand_separator(oper, line, errf);
-        oper = parse_immediate_operand(oper, &imm, line, errf);
+        oper = parse_reg_operands(oper, 2, regs, line, verf, errf);
+        oper = skip_operand_separator(oper, line, verf, errf);
+        oper = parse_immediate_operand(oper, &imm, line, verf, errf);
         *(word_t*)&segdata[addr] = encode_i(0b001101, regs[1], regs[0], imm);
     }
     /* Memory instructions, I format */
     else if (strcmp(ins, "lw") == 0) {
         /* $a, off($b) => rt, imm(rs) */
-        oper = parse_reg_operands(oper, 1, regs, line, errf);
-        oper = skip_operand_separator(oper, line, errf);
+        oper = parse_reg_operands(oper, 1, regs, line, verf, errf);
+        oper = skip_operand_separator(oper, line, verf, errf);
         oper = parse_base_displacement_operand(oper, &imm, regs + 1, line,
-            errf);
+            verf, errf);
         *(word_t*)&segdata[addr] = encode_i(0b100011, regs[0], regs[1], imm);
     }
     else if (strcmp(ins, "sw") == 0) {
         /* $a, off($b) => rs, imm(rt) */
-        oper = parse_reg_operands(oper, 1, regs, line, errf);
-        oper = skip_operand_separator(oper, line, errf);
+        oper = parse_reg_operands(oper, 1, regs, line, verf, errf);
+        oper = skip_operand_separator(oper, line, verf, errf);
         oper = parse_base_displacement_operand(oper, &imm, regs + 1, line,
-            errf);
+            verf, errf);
         *(word_t*)&segdata[addr] = encode_i(0b101011, regs[1], regs[0], imm);
     }
     /* Immediate constant 
         $a, val => rt, val */
     else if (strcmp(ins, "lui") == 0) {
-        oper = parse_reg_operands(oper, 1, regs, line, errf);
-        oper = skip_operand_separator(oper, line, errf);
-        oper = parse_immediate_operand(oper, &imm, line, errf);
+        oper = parse_reg_operands(oper, 1, regs, line, verf, errf);
+        oper = skip_operand_separator(oper, line, verf, errf);
+        oper = parse_immediate_operand(oper, &imm, line, verf, errf);
         *(word_t*)&segdata[addr] = encode_i(0b000100, 0, regs[0], imm);
     }
     /* Conditional jump
         $a, $b, label => rs, rt, (label) */
     else if (strcmp(ins, "beq") == 0) {
-        oper = parse_reg_operands(oper, 2, regs, line, errf);
-        oper = skip_operand_separator(oper, line, errf);
+        oper = parse_reg_operands(oper, 2, regs, line, verf, errf);
+        oper = skip_operand_separator(oper, line, verf, errf);
         oper = parse_label_operand(oper, segs[SEG_TEXT].symbols, &label_addr,
-            line, errf);
+            line, verf, errf);
         *(word_t*)&segdata[addr] = encode_i(0b000100, regs[0], regs[1],
             calculate_relative_jump(addr + TEXT_ORG, label_addr));
     }
@@ -479,7 +569,7 @@ encode_instruction(segment_t *segs, addr_t addr, const char *ins,
         label => addr */
     else if (strcmp(ins, "j") == 0) {
         oper = parse_label_operand(oper, segs[SEG_TEXT].symbols, &label_addr,
-            line, errf);
+            line, verf, errf);
         *(word_t*)&segdata[addr] = encode_j(0b000010, label_addr);
     }
     else {
@@ -550,7 +640,7 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
                     /* Get directive */
                     input = copy_keyword(input, buff, BUFF_SIZE);
                     input = strip(input);
-                    fprintf(verf, "%d: directive: .%s\n", line, buff);
+                    fprintf(verf, "%d: directive: .%s ", line, buff);
 
                     /* Segment directives */
                     if (strcmp(buff, "data") == 0) {
@@ -572,10 +662,12 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
                                 "segment\n", line, buff);
                         }
                     }
+
+                    fprintf(verf, "\n");
                 } else {
                     /* Instruction */
                     input = copy_keyword(input, buff, BUFF_SIZE);
-                    fprintf(verf, "%d: instruction: %s", line, buff);
+                    fprintf(verf, "%d: instruction: %s ", line, buff);
                     input = strip(input);
                     
                     if (passn == 0) {
