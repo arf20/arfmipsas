@@ -79,11 +79,11 @@
  - rs = $b
  - rt = $a
 
-### Constant
+### Immediate constant loading
 
 | instruction     | operation        | format | op     |
 |-----------------|------------------|--------|--------|
-| lui $a, val     | $a = M[$b + off] | I      | 100011 |
+| lui $a, val     | $a = val         | I      | 100011 |
 
  - imm = val
 

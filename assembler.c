@@ -301,7 +301,9 @@ const char *
 parse_reg_operands(const char *oper, int n, reg_t *regs, int line, FILE *errf) {
     /* max 3 regs */
     for (int i = 0; i < n; i++) {
+        oper = strip(oper);
         oper = get_register_operand(oper, regs, line, errf);
+        oper = strip(oper);
         if (i < n - 1) {
             if (*oper != ',')
                 fprintf(errf, "%d: warning: expected ,\n", line);
@@ -316,11 +318,11 @@ parse_reg_operands(const char *oper, int n, reg_t *regs, int line, FILE *errf) {
 const char *
 parse_immediate_operand(const char *oper, uint16_t *imm, int line, FILE *errf) {
     /* expects , initiator */
+    oper = strip(oper);
     if (*oper != ',') {
         fprintf(errf, "%d: warning: expected ,\n", line);
         return oper;
     }
-
     oper++;
     oper = strip(oper);
     int t;
@@ -411,6 +413,13 @@ encode_instruction(uint8_t *segdata, addr_t addr, const char *ins,
         oper = parse_reg_operands(oper, 1, regs, line, errf);
         oper = parse_base_displacement_operand(oper, &imm, regs + 1, line, errf);
         *(word_t*)&segdata[addr] = encode_i(0b101011, regs[1], regs[0], imm);
+    }
+    /* Immediate constant 
+        $a, val => rt, val */
+    else if (strcmp(ins, "lui") == 0) {
+        oper = parse_reg_operands(oper, 1, regs, line, errf);
+        oper = parse_immediate_operand(oper, &imm, line, errf);
+        *(word_t*)&segdata[addr] = encode_i(0b000100, 0, regs[0], imm);
     }
     else {
         fprintf(errf, "%d:  ^^ warning: unknown instruction\n", line);

@@ -8,8 +8,7 @@ value2: .word 0x87654321
         .space 5
         .byte 0x42
         .text
-entry:  add $t0, $t1, $t2
-        ori $s0, $s1, 0x1234
-        sw $t0, 123($t1)
-routine:instd
-another:inste
+entry:  add $t0 , $t1 , $t2 
+        ori $s0 , $s1 , 0x1234 
+        sw $t0, 0x1234 ( $t1 ) 
+        lui $t0, 0x1234
