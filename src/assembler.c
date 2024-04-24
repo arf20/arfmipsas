@@ -341,7 +341,7 @@ skip_operand_separator(const char *oper, int line, FILE *verf, FILE *errf) {
         return oper;
     }
     oper++;
-    printf(", ");
+    fprintf(verf, ", ");
     return strip(oper);
 }
 
@@ -428,7 +428,7 @@ parse_immediate_operand(const char *oper, uint16_t *imm, int line, FILE *verf,
     int t;
     oper = get_numeric_operand(oper, &t);
     *imm = t;
-    printf("%d", *imm);
+    fprintf(verf, "%d", *imm);
     return oper;
 }
 

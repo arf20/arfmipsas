@@ -158,6 +158,10 @@ main(int argc, char **argv) {
         strcpy(outfn, "a");
     }
 
+    FILE *verf = NULL;
+    if (verbose) verf = stdout;
+    else verf = fopen("/dev/null", "w");
+
     /* Read input file */
     char *input = read_whole_file(infn);
     if (!input) {
@@ -167,16 +171,17 @@ main(int argc, char **argv) {
 
     /* Assemble input */
     segment_t *segments = NULL;
-    int r = assemble(input, &segments, stdout, stderr);
+    int r = assemble(input, &segments, verf, stderr);
     if (r < 0) {
         fprintf(stderr, "Error assembling\n");
         return 1;
     }
 
     /* Verbose */
-    print_symbols(segments);
-
-    dump_segments(segments);
+    if (verbose) {
+        print_symbols(segments);
+        dump_segments(segments);
+    }
 
     char buff[256];
 
