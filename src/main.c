@@ -72,6 +72,14 @@ print_symbols(segment_t *segs) {
 }
 
 void
+write_symbols(symbol_table_t *st, FILE *f) {
+    for (int i = 0; i < st->size; i++) {
+        fprintf(f, "%s:0x%.8x\n", st->table[i].label,
+            st->table[i].address);
+    }
+}
+
+void
 dump_segments(segment_t *segs) {
     printf("=== SEGMENT DUMP ===\n");
     for (int i = 0; i < 2; i++) { /* 2 segments */
@@ -196,6 +204,15 @@ main(int argc, char **argv) {
     FILE *outtf = fopen(buff, "wb");
     fwrite(segments[SEG_DATA].data, segments[SEG_DATA].size, 1, outtf);
     fclose(outtf);
+
+    if (debugsym) {
+        strcpy(buff, outfn);
+        strcat(buff, ".sym");
+        FILE *outsf = fopen(buff, "wb");
+        write_symbols(segments[SEG_DATA].symbols, outsf);
+        write_symbols(segments[SEG_TEXT].symbols, outsf);
+        fclose(outsf);
+    }
 
 
     return 0;
