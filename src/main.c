@@ -31,7 +31,8 @@
 void
 usage(char *name) {
     fprintf(stderr, "Usage: %s [options] file\nOptions\n"
-    "  -v\t\tVerbose output.\n  -g\t\tGenerate debug symbols for arfmipssim.\n  -o <file>\tPlace the output into <file>.\n", name);
+    "  -v\t\tVerbose output.\n  -g\t\tGenerate debug symbols for arfmipssim.\n"
+    "  -o <file>\tPlace the output into <file>.\n", name);
 }
 
 char *
@@ -95,7 +96,8 @@ dump_segments(segment_t *segs) {
                 if (j != 0) {
                     printf("  |");
                     for (int k = j - 16; k < j; k++)
-                        isprint(segs[i].data[k]) ? putchar(segs[i].data[k]) : putchar('.');
+                        isprint(segs[i].data[k]) ? putchar(segs[i].data[k])
+                            : putchar('.');
                     printf("|");
                 }
                 printf("\n%.8x ", org + j);
@@ -109,13 +111,32 @@ dump_segments(segment_t *segs) {
                 printf("   ");
             printf("  |");
             for (int k = 16 * (j / 16); k < segs[i].size; k++)
-                isprint(segs[i].data[k]) ? putchar(segs[i].data[k]) : putchar('.');
+                isprint(segs[i].data[k]) ? putchar(segs[i].data[k])
+                    : putchar('.');
             printf("|");
         }
 
         printf("\n");
     }
-    
+}
+
+void
+write_listing(segment_t *segs, const char *input, FILE *f) {
+    segment_t seg = segs[SEG_TEXT];
+    int line = 0;
+    char buff[256];
+    const char *t;
+    while (input && *input) {
+        for (int i = 0; i < seg.size; i++)
+            if (seg.lines[i] == line)
+                fprintf(f, "%.8x\t%.8x\t", TEXT_ORG + (4*i),
+                    *(word_t*)&segs[SEG_TEXT].data[4*i]);
+        
+        t = strchr(input, '\n') + 1;
+        fwrite(input, t - input, 1, f);
+        input = t;
+        line++;
+    }
 }
 
 int
@@ -126,17 +147,19 @@ main(int argc, char **argv) {
     }
 
     /* Command line options */
-    int verbose = 0;
-    int debugsym = 0;
+    int verbose = 0, symbols = 0, listing = 0;
     char *outfn = NULL;
     char *infn = NULL;
+    char buff[256];
+    FILE *verf = NULL;
 
     for (int i = 1; i < argc; i++) {
         if (argv[i][0] == '-') {
             /* Argument */
             switch (argv[i][1]) {
                 case 'v': verbose = 1; break;
-                case 'g': debugsym = 1; break;
+                case 'g': symbols = 1; break;
+                case 'l': listing = 1; break;
                 case 'o': outfn = argv[++i]; break;
             }
         } else {
@@ -158,6 +181,11 @@ main(int argc, char **argv) {
         strcpy(outfn, "a");
     }
 
+    if (verbose)
+        verf = stdout;
+    else
+        verf = fopen("/dev/null", "w");
+
     /* Read input file */
     char *input = read_whole_file(infn);
     if (!input) {
@@ -167,18 +195,28 @@ main(int argc, char **argv) {
 
     /* Assemble input */
     segment_t *segments = NULL;
-    int r = assemble(input, &segments, stdout, stderr);
+    int r = assemble(input, &segments, verf, stderr);
     if (r < 0) {
         fprintf(stderr, "Error assembling\n");
         return 1;
     }
 
     /* Verbose */
-    print_symbols(segments);
+    if (verbose) {
+        print_symbols(segments);
+        printf("=== PROGRAM LISTING ===\n.text\n");
+        write_listing(segments, input, stdout);
+        dump_segments(segments);
+        
+    }
 
-    dump_segments(segments);
+    if (listing) {
+        strcpy(buff, outfn);
+        strcat(buff, ".lst");
+        FILE *outlf = fopen(buff, "w");
+        write_listing(segments, input, outlf);
+    }
 
-    char buff[256];
 
     strcpy(buff, outfn);
     strcat(buff, ".data");

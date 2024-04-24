@@ -1,9 +1,0 @@
-{
-    "files.associations": {
-        "assembler.h": "c",
-        "vector": "c",
-        "__bit_reference": "c",
-        "__split_buffer": "c",
-        "string": "c"
-    }
-}

@@ -341,7 +341,7 @@ skip_operand_separator(const char *oper, int line, FILE *verf, FILE *errf) {
         return oper;
     }
     oper++;
-    printf(", ");
+    fprintf(verf, ", ");
     return strip(oper);
 }
 
@@ -428,7 +428,7 @@ parse_immediate_operand(const char *oper, uint16_t *imm, int line, FILE *verf,
     int t;
     oper = get_numeric_operand(oper, &t);
     *imm = t;
-    printf("%d", *imm);
+    fprintf(verf, "%d", *imm);
     return oper;
 }
 
@@ -650,9 +650,12 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
                     } else {
                         /* Data directives */
                         if (curr_seg == SEG_DATA) {
-                            if (passn == 1)
+                            if (passn == 1) {
                                 write_data(segs[0].data, buff, input,
                                     curr_addr[SEG_DATA], line, verf, errf);
+                                segs[SEG_DATA].lines[(curr_addr[SEG_DATA]-DATA_ORG)/4]
+                                    = line;
+                            }
                             
                             curr_addr[SEG_DATA] = next_data_addr(buff, input,
                                 curr_addr[SEG_DATA], line, errf);
@@ -680,7 +683,11 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
                     } else {
                         encode_instruction(segs,
                             curr_addr[SEG_TEXT], buff, input, line, verf, errf);
-                        if (curr_seg == SEG_TEXT) curr_addr[SEG_TEXT] += 4;;
+                        if (curr_seg == SEG_TEXT) curr_addr[SEG_TEXT] += 4;
+
+                        int i = (curr_addr[SEG_TEXT]-TEXT_ORG)/4;
+                        segs[SEG_TEXT].lines[i]
+                            = line;
                     }
                 
                     fprintf(verf, "\n");
@@ -697,9 +704,13 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
         segs[0].size = curr_addr[0] - DATA_ORG;
         segs[0].data = malloc(segs[0].size);
         memset(segs[0].data, 0, segs[0].size);
+        segs[0].lines = malloc(segs[0].size);
+        memset(segs[0].lines, 0xff, segs[0].size);
         segs[1].size = curr_addr[1] - TEXT_ORG;
         segs[1].data = malloc(segs[1].size);
         memset(segs[1].data, 0, segs[1].size);
+        segs[1].lines = malloc(segs[1].size);
+        memset(segs[1].lines, 0xff, segs[1].size);
     }
 
     return 0;
@@ -711,9 +722,7 @@ assemble(const char *input, segment_t **output, FILE *verf, FILE *errf) {
     segment_t *segs = malloc(2 * sizeof(segment_t));
     for (segid_t i = SEG_DATA; i < SEG_TEXT + 1; i++) {
         segs[i].id = i;
-        segs[i].data = malloc(SEGMENT_INIT_SIZE);
         segs[i].size = 0;
-        segs[i].capacity = SEGMENT_INIT_SIZE;
         segs[i].symbols = symbol_table_new();
     }
 

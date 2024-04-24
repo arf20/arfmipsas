@@ -52,8 +52,8 @@ typedef struct {
     segid_t id;
     uint8_t *data;
     size_t size;
-    size_t capacity;
     symbol_table_t *symbols;
+    int *lines;
 } segment_t;
 
 /* Routines */
