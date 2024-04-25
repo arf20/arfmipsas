@@ -58,6 +58,8 @@ typedef struct {
 
 /* Routines */
 
+void segment_destroy(segment_t *seg);
+
 int assemble(const char *input, segment_t **output, FILE *verf, FILE *errf);
 
 #endif /* _ASSEMBLER_H */

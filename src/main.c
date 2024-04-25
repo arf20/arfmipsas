@@ -173,6 +173,7 @@ main(int argc, char **argv) {
     /* Read input file */
     char *input = read_whole_file(infn);
     if (!input) {
+        free(outfn);
         fprintf(stderr, "Error reading file: %s\n", strerror(errno));
         return 1;
     }
@@ -214,6 +215,15 @@ main(int argc, char **argv) {
         fclose(outsf);
     }
 
+
+    /* Deinit */
+    free(input);
+    free(outfn);
+
+    segment_destroy(&segments[SEG_DATA]);
+    segment_destroy(&segments[SEG_TEXT]);
+
+    free(segments);
 
     return 0;
 }

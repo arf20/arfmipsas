@@ -98,6 +98,15 @@ symbol_table_new() {
 }
 
 void
+symbol_table_destroy(symbol_table_t *st) {
+    for (int i = 0; i < st->size; i++)
+        free(st->table[i].label);
+    free(st->table);
+    st->capacity = st->size = 0;
+    free(st);
+}
+
+void
 symbol_table_push(symbol_table_t *st, symbol_t sym) {
     /* Grow table by double */
     if (st->size == st->capacity) {
@@ -114,6 +123,13 @@ symbol_table_lookup(symbol_table_t *st, const char *label) {
         if (strcmp(st->table[i].label, label) == 0)
             return st->table[i].address;
     return 0; /* on not found */
+}
+
+void
+segment_destroy(segment_t *seg) {
+    free(seg->data);
+    seg->size = seg->capacity = 0;
+    symbol_table_destroy(seg->symbols);
 }
 
 int
@@ -711,9 +727,9 @@ assemble(const char *input, segment_t **output, FILE *verf, FILE *errf) {
     segment_t *segs = malloc(2 * sizeof(segment_t));
     for (segid_t i = SEG_DATA; i < SEG_TEXT + 1; i++) {
         segs[i].id = i;
-        segs[i].data = malloc(SEGMENT_INIT_SIZE);
+        segs[i].data = NULL;
         segs[i].size = 0;
-        segs[i].capacity = SEGMENT_INIT_SIZE;
+        segs[i].capacity = 0;
         segs[i].symbols = symbol_table_new();
     }
 
