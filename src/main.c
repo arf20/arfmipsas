@@ -203,7 +203,7 @@ main(int argc, char **argv) {
     strcpy(buff, outfn);
     strcat(buff, ".text");
     FILE *outtf = fopen(buff, "wb");
-    fwrite(segments[SEG_DATA].data, segments[SEG_DATA].size, 1, outtf);
+    fwrite(segments[SEG_TEXT].data, segments[SEG_TEXT].size, 1, outtf);
     fclose(outtf);
 
     if (debugsym) {
