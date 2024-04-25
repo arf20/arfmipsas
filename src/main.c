@@ -1,6 +1,6 @@
 /*
 
-    arfminesweeper: Cross-plataform multi-frontend game
+    arfmipsas: Assembler for UM ETC base MIPS-based RISC CPU
     Copyright (C) 2023 arf20 (Ángel Ruiz Fernandez)
 
     This program is free software: you can redistribute it and/or modify
