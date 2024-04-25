@@ -595,7 +595,9 @@ encode_instruction(segment_t *segs, addr_t addr, const char *ins,
 
 
 int
-pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
+pass(int passn, const char *input, size_t ilen, segment_t *segs, FILE *verf,
+    FILE *errf)
+{
     /* Deserialization vars */
     const char *t = NULL;
     size_t line = 1;
@@ -606,7 +608,8 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
     segid_t curr_seg = SEG_TEXT; /* .text by default */
     addr_t curr_addr[2] = { DATA_ORG, TEXT_ORG };
     
-    while (*input) {
+    const char *end = input + ilen;
+    while (input < end) {
         input = strip(input);
         if (*input == '\n') {
             fprintf(verf, "%d: Empty line\n", line);
@@ -623,16 +626,15 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
             size_t ll = label_len(input);
             if (input[ll] == ':') {
                 /* Label */
-                char *label = strndup(input, ll);
                 input = strip(input + ll + 1);
 
                 if (passn == 0) {
                     /* Symbol calculation first pass only */
                     symbol_t sym;
-                    sym.label = label;
+                    sym.label = strndup(input, ll);
                     sym.address = curr_addr[curr_seg];
                     symbol_table_push(segs[curr_seg].symbols, sym);
-                    fprintf(verf, "%d:  -> label %s: 0x%.8x\n", line, label,
+                    fprintf(verf, "%d:  -> label %s: 0x%.8x\n", line, sym.label,
                         sym.address);
                 }
 
@@ -722,7 +724,9 @@ pass(int passn, const char *input, segment_t *segs, FILE *verf, FILE *errf) {
 }
 
 int
-assemble(const char *input, segment_t **output, FILE *verf, FILE *errf) {
+assemble(const char *input, size_t ilen, segment_t **output, FILE *verf,
+    FILE *errf)
+{
     /* Init segments */
     segment_t *segs = malloc(2 * sizeof(segment_t));
     for (segid_t i = SEG_DATA; i < SEG_TEXT + 1; i++) {
@@ -740,7 +744,7 @@ assemble(const char *input, segment_t **output, FILE *verf, FILE *errf) {
         else
             fprintf(verf, "=== SECOND PASS ===\n");
         
-        int err = pass(i, input, segs, verf, errf);
+        int err = pass(i, input, ilen, segs, verf, errf);
         if (err < 0) {
             return err;
         }

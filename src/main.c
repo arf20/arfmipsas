@@ -35,16 +35,13 @@ usage(char *name) {
 }
 
 char *
-read_whole_file(const char *fn) {
-    FILE *f = fopen(fn, "r");
-    if (!f) return NULL;
-
+read_whole_file(FILE *f, size_t *sz) {
     fseek(f, 0, SEEK_END);
-    size_t ins = ftell(f);
+    *sz = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    char *buff = malloc(ins);
-    fread(buff, ins, 1, f);
+    char *buff = malloc(*sz);
+    fread(buff, *sz, 1, f);
 
     fclose(f);
 
@@ -162,7 +159,7 @@ main(int argc, char **argv) {
     }
 
     if (!outfn) {
-        outfn = malloc(256);
+        outfn = malloc(2);
         strcpy(outfn, "a");
     }
 
@@ -171,16 +168,19 @@ main(int argc, char **argv) {
     else verf = fopen("/dev/null", "w");
 
     /* Read input file */
-    char *input = read_whole_file(infn);
-    if (!input) {
+    FILE *inf = fopen(infn, "r");
+    if (!inf) {
         free(outfn);
         fprintf(stderr, "Error reading file: %s\n", strerror(errno));
         return 1;
     }
 
+    size_t inlen;
+    char *input = read_whole_file(inf, &inlen);
+
     /* Assemble input */
     segment_t *segments = NULL;
-    int r = assemble(input, &segments, verf, stderr);
+    int r = assemble(input, inlen, &segments, verf, stderr);
     if (r < 0) {
         fprintf(stderr, "Error assembling\n");
         return 1;

@@ -60,6 +60,7 @@ typedef struct {
 
 void segment_destroy(segment_t *seg);
 
-int assemble(const char *input, segment_t **output, FILE *verf, FILE *errf);
+int assemble(const char *input, size_t ilen, segment_t **output, FILE *verf,
+    FILE *errf);
 
 #endif /* _ASSEMBLER_H */
