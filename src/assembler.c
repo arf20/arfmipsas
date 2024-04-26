@@ -569,7 +569,7 @@ encode_instruction(segment_t *segs, addr_t addr, const char *ins,
         oper = parse_reg_operands(oper, 1, regs, line, verf, errf);
         oper = skip_operand_separator(oper, line, verf, errf);
         oper = parse_immediate_operand(oper, &imm, line, verf, errf);
-        *(word_t*)&segdata[addr] = encode_i(0b000100, 0, regs[0], imm);
+        *(word_t*)&segdata[addr] = encode_i(0b001111, 0, regs[0], imm);
     }
     /* Conditional jump
         $a, $b, label => rs, rt, (label) */

@@ -87,7 +87,7 @@
 
 | instruction     | operation        | format | op     |
 |-----------------|------------------|--------|--------|
-| lui $a, val     | $a = val         | I      | 100011 |
+| lui $a, val     | $a = val         | I      | 001111 |
 
  - rt = $a
  - imm = val
